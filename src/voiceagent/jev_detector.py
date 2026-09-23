@@ -1,13 +1,33 @@
+"""End-of-turn detection backed by Jev (Typesafe AI).
+
+Silence alone can't tell "I need help with my..." (mid-thought pause) from
+"My laptop won't boot." (finished turn). Instead of a fixed silence timeout,
+each candidate turn is sent to Jev with the recent dialogue, and Jev classifies
+it as a real turn, a mid-sentence pause, or a backchannel ("yeah", "uh-huh").
+That classification is mapped to the end-of-turn probability LiveKit uses to
+choose between its short and long endpointing delays.
+"""
+
 import logging
 import os
+from dataclasses import dataclass
+from typing import Any, Literal
+
 import httpx
+from livekit.agents import llm
 
-logger = logging.getLogger("voiceagent.jev")
+logger = logging.getLogger(__name__)
 
-JEV_API_KEY = os.getenv("TYPESAFE_API_KEY")
-JEV_ENDPOINT = "https://api.typesafe.ai/v1/systemone"
+TurnAction = Literal["respond", "wait_pause", "backchannel"]
 
-QUESTIONS_SCHEMA = {
+JEV_BASE_URL = "https://api.typesafe.ai"
+JEV_MODEL = "jev-latest"
+REQUEST_TIMEOUT_S = 1.5
+HISTORY_WINDOW = 4  # prior messages sent as context; kept small for latency
+RESPOND_THRESHOLD = 0.70  # min Jev completeness to treat a "respond" as a finished turn
+HOLD_PROBABILITY = 0.2  # returned for pauses/backchannels; must stay below unlikely_threshold
+
+QUESTIONS = {
     "is_turn_complete": {
         "type": "noul",
         "instructions": "Determine whether the speaker has concluded an active turn and expects an agent response.",
@@ -28,55 +48,114 @@ QUESTIONS_SCHEMA = {
 }
 
 
-class JevTurnDetector:
-    def __init__(self, api_key: str | None = None):
-        key = api_key or os.getenv("TYPESAFE_API_KEY") or JEV_API_KEY or ""
-        self.client = httpx.AsyncClient(
-            base_url="https://api.typesafe.ai",
-            headers={
-                "Authorization": f"Bearer {key}",
-                "Content-Type": "application/json",
-            },
-            timeout=1.5,  # 1.5s timeout for network roundtrips
+@dataclass(frozen=True)
+class TurnDecision:
+    action: TurnAction
+    completeness: float
+
+    @classmethod
+    def from_response(cls, data: dict[str, Any]) -> "TurnDecision":
+        answers = data.get("answers", {})
+        return cls(
+            action=answers.get("turn_action", {}).get("choice", "respond"),
+            completeness=float(answers.get("is_turn_complete", {}).get("noul", 1.0)),
+        )
+
+    def end_of_turn_probability(self) -> float:
+        if self.action == "respond" and self.completeness >= RESPOND_THRESHOLD:
+            return self.completeness
+        # Pause or backchannel: stay under unlikely_threshold so LiveKit waits up to max_delay.
+        return min(self.completeness, HOLD_PROBABILITY)
+
+
+# Fail open: if Jev is unreachable the agent still answers, just without smart endpointing.
+FALLBACK = TurnDecision(action="respond", completeness=1.0)
+
+
+class JevClient:
+    def __init__(self, api_key: str | None = None) -> None:
+        self._http = httpx.AsyncClient(
+            base_url=JEV_BASE_URL,
+            headers={"Authorization": f"Bearer {api_key or os.environ['TYPESAFE_API_KEY']}"},
+            timeout=REQUEST_TIMEOUT_S,
         )
 
     async def evaluate_turn(
         self,
-        recent_transcript: str,
-        dialogue_history: list,
+        transcript: str,
+        history: list[dict[str, str]],
         silence_ms: int,
         assistant_was_speaking: bool = False,
-    ) -> dict:
+    ) -> TurnDecision:
         state = {
-            "dialogue_history": dialogue_history[-4:],  # Keep sliding window small for latency
-            "recent_transcript": recent_transcript,
+            "dialogue_history": history,
+            "recent_transcript": transcript,
             "silence_duration_ms": silence_ms,
             "assistant_was_speaking": assistant_was_speaking,
         }
-
         try:
-            resp = await self.client.post(
+            resp = await self._http.post(
                 "/v1/systemone",
-                json={
-                    "model": "jev-latest",
-                    "state": state,
-                    "questions": QUESTIONS_SCHEMA,
-                },
+                json={"model": JEV_MODEL, "state": state, "questions": QUESTIONS},
             )
-            if resp.status_code != 200:
-                logger.error("Jev API error %s: %s", resp.status_code, resp.text)
-                return {"action": "respond", "confidence": 1.0, "is_complete": 1.0}
+            resp.raise_for_status()
+            return TurnDecision.from_response(resp.json())
+        except (httpx.HTTPError, ValueError) as e:  # ValueError: malformed JSON body
+            logger.warning("Jev request failed, falling back to respond: %r", e)
+            return FALLBACK
 
-            data = resp.json()
-            answers = data.get("answers", {})
-            turn_action = answers.get("turn_action", {})
-            is_turn_complete = answers.get("is_turn_complete", {})
+    async def aclose(self) -> None:
+        await self._http.aclose()
 
-            return {
-                "action": turn_action.get("choice", "respond"),
-                "confidence": turn_action.get("confidence", 1.0),
-                "is_complete": float(is_turn_complete.get("noul", 1.0)),
-            }
-        except Exception as e:
-            logger.warning("Jev request failed (%s), falling back to respond: %s", type(e).__name__, e)
-            return {"action": "respond", "confidence": 1.0, "is_complete": 1.0}
+
+class JevTurnDetector:
+    """Implements LiveKit's turn-detector protocol (livekit.agents.voice.turn._TurnDetector)."""
+
+    def __init__(
+        self,
+        client: JevClient,
+        *,
+        silence_ms: int,
+        unlikely_threshold: float = 0.5,
+    ) -> None:
+        self._client = client
+        self._silence_ms = silence_ms
+        self._unlikely_threshold = unlikely_threshold
+
+    @property
+    def model(self) -> str:
+        return JEV_MODEL
+
+    @property
+    def provider(self) -> str:
+        return "typesafe"
+
+    async def supports_language(self, language: object) -> bool:
+        return True
+
+    async def unlikely_threshold(self, language: object) -> float:
+        return self._unlikely_threshold
+
+    async def predict_end_of_turn(
+        self, chat_ctx: llm.ChatContext, *, timeout: float | None = None
+    ) -> float:
+        messages = chat_ctx.messages()
+        if not messages:
+            return 1.0
+
+        *earlier, current = messages
+        transcript = current.text_content or ""
+        history = [
+            {"speaker": m.role, "text": m.text_content or ""} for m in earlier[-HISTORY_WINDOW:]
+        ]
+
+        decision = await self._client.evaluate_turn(transcript, history, self._silence_ms)
+        prob = decision.end_of_turn_probability()
+        logger.info(
+            "turn %r -> action=%s completeness=%.2f p_eot=%.2f",
+            transcript,
+            decision.action,
+            decision.completeness,
+            prob,
+        )
+        return prob

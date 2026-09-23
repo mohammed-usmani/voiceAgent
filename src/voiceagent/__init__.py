@@ -1,3 +1,3 @@
-from .agent import server  
+from .agent import main, server
 
-__all__ = ["server"]
+__all__ = ["main", "server"]
