@@ -1,9 +1,11 @@
+import time
+
 from dotenv import load_dotenv
 from livekit import agents
-from livekit.agents import Agent, AgentServer, AgentSession, JobContext, room_io
-from livekit.plugins import cartesia, deepgram, silero
+from livekit.agents import Agent, AgentServer, AgentSession, JobContext, inference, room_io
+from livekit.plugins import cartesia, deepgram, noise_cancellation, silero
 
-from voiceagent.jev_detector import JevClient, JevTurnDetector
+from voiceagent.decision_log import DecisionTracker, watch
 
 load_dotenv()
 
@@ -15,21 +17,29 @@ INSTRUCTIONS = (
 )
 GREETING = "Say: 'Hello! What issue can I help fix on your computer today?'"
 
-VAD_MIN_SILENCE_S = 0.20
-
-# Loaded once per process so incoming calls don't block on ONNX initialization.
-_vad = silero.VAD.load(min_speech_duration=0.1, min_silence_duration=VAD_MIN_SILENCE_S)
+# Default Silero settings. Loaded once per process so incoming calls don't block on
+# ONNX initialization.
+_vad = silero.VAD.load()
 
 # One pre-warmed idle process so calls attach without a cold start.
 server = AgentServer(num_idle_processes=1)
 
 
+def turn_handling() -> dict:
+    """LiveKit's recommended turn-taking setup, unmodified.
+
+    See docs.livekit.io/agents/logic/turns/tuning: audio turn detector at its default
+    version, adaptive interruption, default endpointing and preemptive generation.
+    """
+    return {
+        "turn_detection": inference.TurnDetector(),
+        "interruption": {"mode": "adaptive", "min_duration": 0.5, "min_words": 0},
+    }
+
+
 @server.rtc_session(agent_name="clinic-agent")
 async def entrypoint(ctx: JobContext) -> None:
     await ctx.connect()
-
-    jev = JevClient()
-    ctx.add_shutdown_callback(jev.aclose)
 
     session = AgentSession(
         stt=deepgram.STT(model="nova-3", language="en"),
@@ -40,22 +50,25 @@ async def entrypoint(ctx: JobContext) -> None:
             sample_rate=24000,
         ),
         vad=_vad,
-        turn_handling={
-            "turn_detection": JevTurnDetector(
-                jev, silence_ms=int(VAD_MIN_SILENCE_S * 1000), unlikely_threshold=0.5
-            ),
-            "interruption": {"enabled": True},
-            # Respond after 350ms on a complete thought; hold up to 2s on pauses and fillers.
-            "endpointing": {"min_delay": 0.35, "max_delay": 2.0},
-            "preemptive_generation": {"enabled": False},
-        },
+        turn_handling=turn_handling(),
     )
+
+    tracker = DecisionTracker.open(ctx.room.name)
+    watch(session, tracker)
+
+    async def close_log() -> None:
+        tracker.close(time.time())
+
+    ctx.add_shutdown_callback(close_log)
 
     await session.start(
         agent=Agent(instructions=INSTRUCTIONS),
         room=ctx.room,
         room_options=room_io.RoomOptions(
-            audio_input=room_io.AudioInputOptions(noise_cancellation=None),
+            # Calls arrive over SIP: LiveKit recommends the telephony-tuned BVC model.
+            audio_input=room_io.AudioInputOptions(
+                noise_cancellation=noise_cancellation.BVCTelephony()
+            ),
         ),
     )
     await session.generate_reply(instructions=GREETING)

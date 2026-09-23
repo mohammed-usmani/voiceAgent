@@ -1,61 +1,53 @@
 # voiceagent
 
-A LiveKit phone-support voice agent that decides when the caller is done speaking
-by asking [Jev](https://typesafe.ai) (Typesafe AI) instead of waiting out a fixed
-silence timer.
+A LiveKit phone-support voice agent that logs every turn-taking decision it makes,
+so you can see exactly where it cuts callers off, leaves dead air, or mishandles
+interruptions.
 
-## The problem
+## Turn-taking
 
-Most voice agents end a turn after N ms of silence. That forces a bad trade-off:
+The agent runs LiveKit's recommended turn-taking setup unchanged
+([Tuning turn-taking](https://docs.livekit.io/agents/logic/turns/tuning/)):
 
-- **Short timeout** → the agent cuts people off mid-thought:
-  *"My laptop keeps… um…"* → agent jumps in.
-- **Long timeout** → every normal reply feels sluggish.
-- **Backchannels** (*"yeah"*, *"uh-huh"*) said while the agent is talking get
-  treated as a new turn, and the agent stops to answer them.
+| Piece | Setting |
+|---|---|
+| End of turn | `inference.TurnDetector()`: LiveKit's audio turn detector, default version |
+| Interruptions | adaptive (backchannel-aware), `min_duration=0.5`, `min_words=0` |
+| Endpointing | LiveKit defaults for the audio detector (0.3 s / 2.5 s) |
+| VAD | Silero, default settings |
+| Noise cancellation | `BVCTelephony`, since calls arrive over SIP |
+| Preemptive generation | LiveKit default (on) |
 
-Silence duration is the wrong signal. Whether a turn is finished depends on
-*what* was said and the conversation around it.
+A test pins this configuration so it can't drift silently.
 
-## The approach
+## Decision log
 
-When VAD reports a pause, the agent sends the partial transcript plus the last
-few messages to Jev and asks two structured questions:
+Each call writes `logs/decisions/<time>-<room>.jsonl`, one line per decision:
 
-| Question | Type | Answers |
-|---|---|---|
-| `is_turn_complete` | noul (probability) | did the caller finish a substantive turn? |
-| `turn_action` | choice | `respond` · `wait_pause` · `backchannel` |
+- **pause**: the caller stopped talking. Outcome `respond` (the agent took the
+  turn, with the delay in ms) or `wait` (the caller carried on).
+- **overlap**: the caller spoke while the agent was talking. Outcome `interrupt`
+  or `ignore`.
 
-Those answers become the end-of-turn probability LiveKit already knows how to use:
+Likely mistakes are pre-flagged in `suspect`:
 
-```mermaid
-flowchart LR
-    A[Caller audio] --> B[Silero VAD<br/>200 ms pause]
-    B --> C[Deepgram STT]
-    C --> D{Jev}
-    D -- "respond, completeness ≥ 0.70" --> E[p = completeness<br/>reply after 350 ms]
-    D -- "wait_pause / backchannel" --> F[p ≤ 0.2<br/>hold up to 2 s]
-    E --> G[Gemini → Cartesia TTS]
+| Flag | Meaning |
+|---|---|
+| `cut_off` | the caller started talking again within 1.5 s of the agent taking the turn |
+| `slow_response` | the agent took over 1.2 s to take the turn |
+| `false_stop` | the agent stopped for a backchannel like "yeah" or "uh-huh" |
+| `missed_barge_in` | the caller said 3+ real words and the agent kept talking |
+
+```json
+{"i": 5, "kind": "pause", "t": 32.83, "transcript": "No.", "outcome": "respond",
+ "eot_delay_ms": 2503, "suspect": "slow_response", ...}
 ```
-
-- Finished thought → the agent answers in ~350 ms.
-- Filler, trailing clause or backchannel → the probability falls below LiveKit's
-  `unlikely_threshold`, so it holds for up to 2 s and lets the caller continue.
-- Jev slow, down or returning garbage → **fails open** to "respond". The worst
-  case is the plain silence-based behavior, never a stuck agent.
-
-The whole integration lives in [`src/voiceagent/jev_detector.py`](src/voiceagent/jev_detector.py)
-and plugs into LiveKit's standard turn-detector protocol, so it swaps in for
-LiveKit's built-in model with no other changes.
 
 ## Stack
 
 | Layer | Choice |
 |---|---|
-| Transport / orchestration | LiveKit Agents |
-| VAD | Silero |
-| Turn detection | Jev (Typesafe AI) |
+| Transport / orchestration | LiveKit Agents, with calls over SIP |
 | STT | Deepgram Nova-3 |
 | LLM | Gemini 2.5 Flash (via LiveKit Inference) |
 | TTS | Cartesia Sonic-3 |
@@ -67,7 +59,7 @@ Requires Python 3.13 and [uv](https://docs.astral.sh/uv/).
 ```bash
 cp .env.example .env    # fill in keys
 uv sync
-uv run voiceagent dev   # connect from the LiveKit Agents Playground
+uv run voiceagent dev
 ```
 
 ## Development
@@ -76,8 +68,3 @@ uv run voiceagent dev   # connect from the LiveKit Agents Playground
 uv run pytest
 uv run ruff check . && uv run ruff format --check .
 ```
-
-Tuning knobs:
-
-- `RESPOND_THRESHOLD` and `HOLD_PROBABILITY` in `jev_detector.py`
-- `endpointing.min_delay` / `max_delay` in `agent.py`

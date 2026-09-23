@@ -1,22 +1,22 @@
 [project]
 name = "voiceagent"
 version = "0.1.0"
-description = "LiveKit voice agent that uses Jev to decide when the caller has actually finished speaking."
+description = "LiveKit phone-support voice agent with per-call logging of every turn-taking decision."
 readme = "README.md"
 authors = [
     { name = "Mohammed", email = "mohammedusmani2005@gmail.com" }
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "httpx>=0.28",
     "livekit-agents[silero]~=1.3",
     "livekit-plugins-cartesia>=1.8.2",
     "livekit-plugins-deepgram>=1.8.2",
+    "livekit-plugins-noise-cancellation~=0.2",
     "python-dotenv>=1.2.3",
 ]
 
 [project.scripts]
-voiceagent = "voiceagent:main"
+voiceagent = "voiceagent.agent:main"
 
 [dependency-groups]
 dev = [
