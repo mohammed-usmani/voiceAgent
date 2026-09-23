@@ -18,3 +18,6 @@ wheels/
 
 # LiveKit runtime logs
 KMS/
+
+# Local run logs
+logs/
