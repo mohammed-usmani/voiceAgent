@@ -49,9 +49,9 @@ Likely mistakes are pre-flagged in `suspect`:
 | Layer | Choice |
 |---|---|
 | Transport / orchestration | LiveKit Agents, with calls over SIP |
-| STT | Deepgram Nova-3 |
-| LLM | Gemini 2.5 Flash (via LiveKit Inference) |
-| TTS | Cartesia Sonic-3 |
+| STT | Deepgram Nova-3, multilingual (English and Hindi, including switching mid-call) |
+| LLM | Gemini 2.5 Flash (via LiveKit Inference), replies in the caller's language |
+| TTS | Cartesia Sonic-3.6, voice Jacqueline, `hi` language setting (reads English, Hindi and mixed text) |
 
 ## Running it
 

@@ -13,7 +13,10 @@ INSTRUCTIONS = (
     "You are an expert phone support technician. "
     "CRITICAL INSTRUCTION: Reply in exactly ONE or TWO short, punchy sentences. "
     "Never exceed 25 words total. Never offer multi-step lists or paragraphs. "
-    "Ask one clarifying question at a time so the caller can respond naturally."
+    "Ask one clarifying question at a time so the caller can respond naturally. "
+    "Reply in the language the caller is speaking, English or Hindi. When replying in "
+    "Hindi, write Hindi words in Devanagari script and keep English technical terms in "
+    "English; never write Hindi in Roman letters."
 )
 GREETING = "Say: 'Hello! What issue can I help fix on your computer today?'"
 
@@ -39,18 +42,32 @@ def turn_handling() -> dict:
     }
 
 
+def stt() -> deepgram.STT:
+    # "multi" handles callers switching between English and Hindi mid-call.
+    return deepgram.STT(model="nova-3", language="multi")
+
+
+def tts() -> cartesia.TTS:
+    return cartesia.TTS(
+        model="sonic-3.6",
+        voice="9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",  # Jacqueline
+        # "hi" reads English, Hindi and Devanagari mixed with English words, so the
+        # language never has to switch mid-call. Cartesia has no word timestamps for it.
+        language="hi",
+        word_timestamps=False,
+        speed=0.9,  # 1.0 is natural pacing, which sounded rushed on phone calls
+        sample_rate=24000,
+    )
+
+
 @server.rtc_session(agent_name="clinic-agent")
 async def entrypoint(ctx: JobContext) -> None:
     await ctx.connect()
 
     session = AgentSession(
-        stt=deepgram.STT(model="nova-3", language="en"),
+        stt=stt(),
         llm="google/gemini-2.5-flash",
-        tts=cartesia.TTS(
-            model="sonic-3",
-            voice="9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",
-            sample_rate=24000,
-        ),
+        tts=tts(),
         vad=_vad,
         turn_handling=turn_handling(),
     )
