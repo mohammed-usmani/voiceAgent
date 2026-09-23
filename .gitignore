@@ -15,3 +15,6 @@ wheels/
 # Tooling caches
 .pytest_cache/
 .ruff_cache/
+
+# LiveKit runtime logs
+KMS/
