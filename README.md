@@ -6,8 +6,9 @@ interruptions.
 
 ## Turn-taking
 
-The agent runs LiveKit's recommended turn-taking setup unchanged
-([Tuning turn-taking](https://docs.livekit.io/agents/logic/turns/tuning/)):
+The agent runs LiveKit's recommended turn-taking setup
+([Tuning turn-taking](https://docs.livekit.io/agents/logic/turns/tuning/)), with
+preemptive generation turned off:
 
 | Piece | Setting |
 |---|---|
@@ -16,7 +17,7 @@ The agent runs LiveKit's recommended turn-taking setup unchanged
 | Endpointing | LiveKit defaults for the audio detector (0.3 s / 2.5 s) |
 | VAD | Silero, default settings |
 | Noise cancellation | `BVCTelephony`, since calls arrive over SIP |
-| Preemptive generation | LiveKit default (on) |
+| Preemptive generation | off, so no replies are drafted while the caller is mid-sentence |
 
 A test pins this configuration so it can't drift silently.
 

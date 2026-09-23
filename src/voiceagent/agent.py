@@ -26,14 +26,16 @@ server = AgentServer(num_idle_processes=1)
 
 
 def turn_handling() -> dict:
-    """LiveKit's recommended turn-taking setup, unmodified.
+    """LiveKit's recommended turn-taking setup, minus preemptive generation.
 
     See docs.livekit.io/agents/logic/turns/tuning: audio turn detector at its default
-    version, adaptive interruption, default endpointing and preemptive generation.
+    version, adaptive interruption, default endpointing. Preemptive generation is off
+    so the LLM never drafts replies to a caller who is still mid-sentence.
     """
     return {
         "turn_detection": inference.TurnDetector(),
         "interruption": {"mode": "adaptive", "min_duration": 0.5, "min_words": 0},
+        "preemptive_generation": {"enabled": False},
     }
 
 
