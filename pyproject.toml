@@ -1,0 +1,26 @@
+[project]
+name = "voiceagent"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Mohammed", email = "mohammedusmani2005@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "livekit-agents[silero,turn-detector]~=1.3",
+    "livekit-plugins-cartesia>=1.8.2",
+    "livekit-plugins-deepgram>=1.8.2",
+    "livekit-plugins-noise-cancellation~=0.2",
+    "livekit-plugins-openai>=1.8.2",
+    "python-dotenv>=1.2.3",
+    "torch>=2.14.0",
+    "torchaudio>=2.11.0",
+]
+
+[project.scripts]
+voiceagent = "voiceagent:main"
+
+[build-system]
+requires = ["uv_build>=0.12.1,<0.13.0"]
+build-backend = "uv_build"
