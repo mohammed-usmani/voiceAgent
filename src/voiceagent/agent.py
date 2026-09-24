@@ -29,16 +29,16 @@ server = AgentServer(num_idle_processes=1)
 
 
 def turn_handling() -> dict:
-    """LiveKit's recommended turn-taking setup, minus preemptive generation.
+    """LiveKit's recommended turn-taking setup, unmodified.
 
     See docs.livekit.io/agents/logic/turns/tuning: audio turn detector at its default
-    version, adaptive interruption, default endpointing. Preemptive generation is off
-    so the LLM never drafts replies to a caller who is still mid-sentence.
+    version, adaptive interruption, default endpointing and preemptive generation.
+    Preemptive generation starts the LLM and TTS while the turn is still being
+    decided, so their latency overlaps the endpointing delay instead of adding to it.
     """
     return {
         "turn_detection": inference.TurnDetector(),
         "interruption": {"mode": "adaptive", "min_duration": 0.5, "min_words": 0},
-        "preemptive_generation": {"enabled": False},
     }
 
 
