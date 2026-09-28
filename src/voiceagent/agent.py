@@ -7,6 +7,7 @@ from livekit.agents import Agent, AgentServer, AgentSession, JobContext, inferen
 from livekit.plugins import cartesia, deepgram, groq, noise_cancellation, silero
 
 from voiceagent.decision_log import DecisionTracker, watch
+from voiceagent.outbound import AGENT_NAME
 from voiceagent.short_answers import (
     CallerText,
     ShortAnswerTurnDetector,
@@ -200,7 +201,7 @@ def log_pipeline(session: AgentSession) -> None:
         logger.error("session error from %s: %s", type(ev.source).__name__, ev.error)
 
 
-@server.rtc_session(agent_name="clinic-agent")
+@server.rtc_session(agent_name=AGENT_NAME)
 async def entrypoint(ctx: JobContext) -> None:
     await ctx.connect()
 

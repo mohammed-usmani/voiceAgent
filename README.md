@@ -62,6 +62,17 @@ uv sync
 uv run voiceagent dev
 ```
 
+To have the agent call you instead, with the agent running:
+
+```bash
+uv run voiceagent-call you@sip.linphone.org   # or set CALL_TO in .env
+```
+
+The phone rings showing "Nimbus Labs Hiring", and the agent joins once you answer. A free
+[linphone.org](https://www.linphone.org) account works as the callee, so no phone number
+has to be bought. The LiveKit outbound trunk is created on first use, over TCP: the
+Linphone server didn't answer over UDP.
+
 ## Development
 
 ```bash

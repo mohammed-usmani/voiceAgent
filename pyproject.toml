@@ -18,6 +18,7 @@ dependencies = [
 
 [project.scripts]
 voiceagent = "voiceagent.agent:main"
+voiceagent-call = "voiceagent.outbound:main"
 
 [dependency-groups]
 dev = [
