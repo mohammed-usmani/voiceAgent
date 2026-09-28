@@ -15,7 +15,7 @@ import sys
 from dotenv import load_dotenv
 from livekit import api
 
-AGENT_NAME = "clinic-agent"
+AGENT_NAME = "screening-agent"
 CALLER_NAME = "Nimbus Labs Hiring"
 DEFAULT_HOST = "sip.linphone.org"
 # LiveKit needs a caller number on the trunk; only CALLER_NAME is shown to the callee.
