@@ -49,7 +49,7 @@ Likely mistakes are pre-flagged in `suspect`:
 |---|---|
 | Transport / orchestration | LiveKit Agents, with calls over SIP |
 | STT | Deepgram Nova-3, Indian English (`en-IN`) |
-| LLM | Qwen3.8-27B on Groq with thinking off (~0.1 s to first token, vs ~1.1 s for Gemini 2.5 Flash), replies in the caller's language |
+| LLM | Gemini 2.5 Flash with thinking off (~0.5 s to first token, ~1.1 s with thinking on); gpt-oss-20b on Groq answers if a reply comes back empty or fails |
 | TTS | Cartesia Sonic-3.6, voice Jacqueline, English |
 
 ## Running it
