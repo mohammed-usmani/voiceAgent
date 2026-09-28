@@ -133,9 +133,20 @@ Linphone server didn't answer over UDP.
 | [`backchannel.py`](src/voiceagent/backchannel.py) | Which utterances are backchannels ("yeah", "uh-huh") |
 | [`outbound.py`](src/voiceagent/outbound.py) | `voiceagent-call`: have the agent call a SIP address |
 
+## Built with
+
+The [LiveKit Agents](https://github.com/livekit/agents) SDK, with Deepgram, Gemini, Groq
+and Cartesia as providers. Turn-taking starts from LiveKit's recommended setup. The
+short-answer turn rule, the LLM fallback and history cleanup, the decision log and the
+outbound dialer are original to this repo.
+
 ## Development
 
 ```bash
 uv run pytest
 uv run ruff check . && uv run ruff format --check .
 ```
+
+## License
+
+MIT, see [LICENSE](LICENSE).

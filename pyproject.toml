@@ -3,6 +3,7 @@ name = "voiceagent"
 version = "0.1.0"
 description = "LiveKit phone voice agent for job pre-screening calls, with per-call logging of every turn-taking decision."
 readme = "README.md"
+license = "MIT"
 authors = [
     { name = "Mohammed", email = "mohammedusmani2005@gmail.com" }
 ]
