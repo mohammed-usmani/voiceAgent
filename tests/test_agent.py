@@ -20,7 +20,19 @@ def test_speech_models_accept_their_settings(monkeypatch):
     from voiceagent.agent import stt, tts
 
     assert tts().model == "sonic-3.6"
+    # "hi" gave English words Hindi pronunciation ("do" came out wrong).
+    assert tts()._opts.language.language == "en"
     assert stt().model == "nova-3"
+    # "multi" guessed among ten languages on phone audio ("hello" came back as Spanish).
+    assert stt()._opts.language == "en-IN"
+
+
+def test_prompt_handles_repeats_and_answered_questions():
+    from voiceagent.agent import INSTRUCTIONS
+
+    assert "word for word" in INSTRUCTIONS
+    assert "never re-ask" in INSTRUCTIONS
+    assert "Always reply in English" in INSTRUCTIONS
 
 
 def test_llm_does_not_think_before_speaking(monkeypatch):

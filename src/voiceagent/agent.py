@@ -14,11 +14,15 @@ INSTRUCTIONS = (
     "CRITICAL INSTRUCTION: Reply in exactly ONE or TWO short, punchy sentences. "
     "Never exceed 25 words total. Never offer multi-step lists or paragraphs. "
     "Ask one clarifying question at a time so the caller can respond naturally. "
-    "Reply in the language the caller is speaking, English or Hindi. When replying in "
-    "Hindi, write Hindi words in Devanagari script and keep English technical terms in "
-    "English; never write Hindi in Roman letters."
+    "Always reply in English. "
+    "Build on what the caller has already told you and never re-ask a question they "
+    "answered. If the caller says 'sorry?' or 'what?' or asks you to repeat, repeat your "
+    "last message word for word. If their message looks cut off or garbled, ask them to "
+    "finish or repeat it instead of changing the topic."
 )
-GREETING = "Say: 'Hello! What issue can I help fix on your computer today?'"
+# Spoken as-is, without the LLM: it's fixed text, and Qwen on Groq rejects a request
+# that has no user message yet.
+GREETING = "Hello! What issue can I help fix on your computer today?"
 
 # Default Silero settings. Loaded once per process so incoming calls don't block on
 # ONNX initialization.
@@ -54,18 +58,17 @@ def llm() -> groq.LLM:
 
 
 def stt() -> deepgram.STT:
-    # "multi" handles callers switching between English and Hindi mid-call.
-    return deepgram.STT(model="nova-3", language="multi")
+    # Indian English. "multi" chooses among ten languages and on phone audio it
+    # misheard English ("on its own" -> "on YouTube") and drifted into Spanish.
+    return deepgram.STT(model="nova-3", language="en-IN")
 
 
 def tts() -> cartesia.TTS:
     return cartesia.TTS(
         model="sonic-3.6",
         voice="9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",  # Jacqueline
-        # "hi" reads English, Hindi and Devanagari mixed with English words, so the
-        # language never has to switch mid-call. Cartesia has no word timestamps for it.
-        language="hi",
-        word_timestamps=False,
+        # "hi" gave English words Hindi pronunciation ("do" came out wrong).
+        language="en",
         speed=0.9,  # 1.0 is natural pacing, which sounded rushed on phone calls
         sample_rate=24000,
     )
@@ -101,7 +104,7 @@ async def entrypoint(ctx: JobContext) -> None:
             ),
         ),
     )
-    await session.generate_reply(instructions=GREETING)
+    await session.say(GREETING)
 
 
 def main() -> None:

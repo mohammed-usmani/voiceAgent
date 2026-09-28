@@ -48,9 +48,9 @@ Likely mistakes are pre-flagged in `suspect`:
 | Layer | Choice |
 |---|---|
 | Transport / orchestration | LiveKit Agents, with calls over SIP |
-| STT | Deepgram Nova-3, multilingual (English and Hindi, including switching mid-call) |
+| STT | Deepgram Nova-3, Indian English (`en-IN`) |
 | LLM | Qwen3.8-27B on Groq with thinking off (~0.1 s to first token, vs ~1.1 s for Gemini 2.5 Flash), replies in the caller's language |
-| TTS | Cartesia Sonic-3.6, voice Jacqueline, `hi` language setting (reads English, Hindi and mixed text) |
+| TTS | Cartesia Sonic-3.6, voice Jacqueline, English |
 
 ## Running it
 
