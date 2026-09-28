@@ -10,10 +10,19 @@ from voiceagent.decision_log import DecisionTracker, watch
 load_dotenv()
 
 INSTRUCTIONS = (
-    "You are an expert phone support technician. "
-    "CRITICAL INSTRUCTION: Reply in exactly ONE or TWO short, punchy sentences. "
-    "Never exceed 25 words total. Never offer multi-step lists or paragraphs. "
-    "Ask one clarifying question at a time so the caller can respond naturally. "
+    "You are Aria from the Nimbus Labs hiring team, calling someone who applied for the "
+    "AI Engineer role in Bangalore, to ask a few pre-screening questions before the "
+    "interview. "
+    "CRITICAL INSTRUCTION: Reply in exactly ONE or TWO short, natural sentences. "
+    "Never exceed 25 words total. Never offer lists or paragraphs. "
+    "Ask one question at a time, in this order, skipping anything already answered: "
+    "what they work on in their current role; how many years of experience they have; "
+    "whether they are open to relocating to Bangalore; whether they are serving a notice "
+    "period and when they could join; their current and expected salary; whether they "
+    "have any questions. "
+    "Briefly acknowledge each answer before the next question. If they say it is not a "
+    "good time, ask when to call back and end politely. When done, thank them and say "
+    "the team will email next steps. "
     "Always reply in English. "
     "Build on what the caller has already told you and never re-ask a question they "
     "answered. If the caller says 'sorry?' or 'what?' or asks you to repeat, repeat your "
@@ -22,7 +31,10 @@ INSTRUCTIONS = (
 )
 # Spoken as-is, without the LLM: it's fixed text, and Qwen on Groq rejects a request
 # that has no user message yet.
-GREETING = "Hello! What issue can I help fix on your computer today?"
+GREETING = (
+    "Hi, this is Aria from the Nimbus Labs hiring team, calling about your application "
+    "for the AI Engineer role. Is now a good time for a quick five-minute chat?"
+)
 
 # Default Silero settings. Loaded once per process so incoming calls don't block on
 # ONNX initialization.
@@ -40,13 +52,15 @@ def turn_handling() -> dict:
     Preemptive generation starts the LLM and TTS while the turn is still being
     decided, so their latency overlaps the endpointing delay instead of adding to it.
 
-    One change from the defaults: when the detector is unsure, it waited up to 2.5 s,
-    and on phone audio it is often unsure about one-word answers ("No." stalled 3.6 s).
-    1.3 s caps that stall; a few more mid-sentence cut-offs are the trade-off.
+    One change from the defaults, endpointing. When the detector is unsure it waits
+    max_delay; at the default 2.5 s one-word answers stalled ("No." took 3.6 s), at
+    1.3 s callers were cut off while pausing to think in long answers. 2.0 s splits
+    the difference, and "dynamic" learns each caller's mid-sentence pauses and raises
+    the shorter wait used when the detector is confident.
     """
     return {
         "turn_detection": inference.TurnDetector(),
-        "endpointing": {"max_delay": 1.3},
+        "endpointing": {"mode": "dynamic", "max_delay": 2.0},
         "interruption": {"mode": "adaptive", "min_duration": 0.5, "min_words": 0},
     }
 

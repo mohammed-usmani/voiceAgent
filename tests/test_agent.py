@@ -5,11 +5,11 @@ from voiceagent.agent import turn_handling
 
 def test_turn_handling_is_livekit_recommended_setup():
     # docs.livekit.io/agents/logic/turns/tuning: default detector, adaptive interruption,
-    # preemptive generation left on. Only the longest end-of-turn wait is capped.
+    # preemptive generation left on. Only endpointing is tuned.
     cfg = turn_handling()
     assert isinstance(cfg["turn_detection"], inference.TurnDetector)
     assert cfg["interruption"] == {"mode": "adaptive", "min_duration": 0.5, "min_words": 0}
-    assert cfg["endpointing"] == {"max_delay": 1.3}
+    assert cfg["endpointing"] == {"mode": "dynamic", "max_delay": 2.0}
     assert set(cfg) == {"turn_detection", "endpointing", "interruption"}
 
 

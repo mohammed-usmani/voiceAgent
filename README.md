@@ -1,6 +1,6 @@
 # voiceagent
 
-A LiveKit phone-support voice agent that logs every turn-taking decision it makes,
+A LiveKit phone voice agent that runs job pre-screening calls and logs every turn-taking decision it makes,
 so you can see exactly where it cuts callers off, leaves dead air, or mishandles
 interruptions.
 
@@ -13,7 +13,7 @@ The agent runs LiveKit's recommended turn-taking setup unchanged
 |---|---|
 | End of turn | `inference.TurnDetector()`: LiveKit's audio turn detector, default version |
 | Interruptions | adaptive (backchannel-aware), `min_duration=0.5`, `min_words=0` |
-| Endpointing | 0.3 s minimum (LiveKit default), 1.3 s maximum (default 2.5 s stalled one-word answers) |
+| Endpointing | Dynamic (learns each caller's mid-sentence pauses), 2.0 s maximum (2.5 s stalled one-word answers, 1.3 s cut off long answers) |
 | VAD | Silero, default settings |
 | Noise cancellation | `BVCTelephony`, since calls arrive over SIP |
 | Preemptive generation | LiveKit default (on): the reply is drafted while the turn is being decided |
