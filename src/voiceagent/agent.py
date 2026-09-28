@@ -3,7 +3,7 @@ import time
 from dotenv import load_dotenv
 from livekit import agents
 from livekit.agents import Agent, AgentServer, AgentSession, JobContext, inference, room_io
-from livekit.plugins import cartesia, deepgram, noise_cancellation, silero
+from livekit.plugins import cartesia, deepgram, groq, noise_cancellation, silero
 
 from voiceagent.decision_log import DecisionTracker, watch
 
@@ -35,11 +35,22 @@ def turn_handling() -> dict:
     version, adaptive interruption, default endpointing and preemptive generation.
     Preemptive generation starts the LLM and TTS while the turn is still being
     decided, so their latency overlaps the endpointing delay instead of adding to it.
+
+    One change from the defaults: when the detector is unsure, it waited up to 2.5 s,
+    and on phone audio it is often unsure about one-word answers ("No." stalled 3.6 s).
+    1.3 s caps that stall; a few more mid-sentence cut-offs are the trade-off.
     """
     return {
         "turn_detection": inference.TurnDetector(),
+        "endpointing": {"max_delay": 1.3},
         "interruption": {"mode": "adaptive", "min_duration": 0.5, "min_words": 0},
     }
+
+
+def llm() -> groq.LLM:
+    # Measured from India, first spoken token: Gemini 2.5 Flash ~1.1 s (thinks by
+    # default), with thinking off ~0.5 s; Qwen3.8-27B on Groq with thinking off ~0.11 s.
+    return groq.LLM(model="qwen/qwen3.8-27b", reasoning_effort="none")
 
 
 def stt() -> deepgram.STT:
@@ -66,7 +77,7 @@ async def entrypoint(ctx: JobContext) -> None:
 
     session = AgentSession(
         stt=stt(),
-        llm="google/gemini-2.5-flash",
+        llm=llm(),
         tts=tts(),
         vad=_vad,
         turn_handling=turn_handling(),

@@ -13,7 +13,7 @@ The agent runs LiveKit's recommended turn-taking setup unchanged
 |---|---|
 | End of turn | `inference.TurnDetector()`: LiveKit's audio turn detector, default version |
 | Interruptions | adaptive (backchannel-aware), `min_duration=0.5`, `min_words=0` |
-| Endpointing | LiveKit defaults for the audio detector (0.3 s / 2.5 s) |
+| Endpointing | 0.3 s minimum (LiveKit default), 1.3 s maximum (default 2.5 s stalled one-word answers) |
 | VAD | Silero, default settings |
 | Noise cancellation | `BVCTelephony`, since calls arrive over SIP |
 | Preemptive generation | LiveKit default (on): the reply is drafted while the turn is being decided |
@@ -49,7 +49,7 @@ Likely mistakes are pre-flagged in `suspect`:
 |---|---|
 | Transport / orchestration | LiveKit Agents, with calls over SIP |
 | STT | Deepgram Nova-3, multilingual (English and Hindi, including switching mid-call) |
-| LLM | Gemini 2.5 Flash (via LiveKit Inference), replies in the caller's language |
+| LLM | Qwen3.8-27B on Groq with thinking off (~0.1 s to first token, vs ~1.1 s for Gemini 2.5 Flash), replies in the caller's language |
 | TTS | Cartesia Sonic-3.6, voice Jacqueline, `hi` language setting (reads English, Hindi and mixed text) |
 
 ## Running it
