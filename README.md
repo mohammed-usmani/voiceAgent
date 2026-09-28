@@ -4,23 +4,30 @@ A LiveKit phone voice agent that runs job pre-screening calls, and logs every
 turn-taking decision it makes, so you can see exactly where it cuts callers off,
 leaves dead air, or mishandles interruptions.
 
-Aria, a recruiter at a fictional company, calls an applicant (or takes their call)
-and asks about their current role, experience, relocation, notice period and salary.
+Aria, a recruiter at a fictional company, calls a shortlisted applicant (or takes their
+call), confirms their current role, experience, notice period, salary and work setup, and
+books a slot for their final interview.
 
 ## Results
 
-Measured on test phone calls, from the moment the caller stops speaking to the agent's
-first audio, at the agent (the phone network adds a little on top):
+Reply time is measured from the moment the caller stops speaking to the agent's first
+audio.
 
-| | Median reply | Slowest reply |
-|---|---|---|
-| Starting point: LiveKit defaults, Gemini 2.5 Flash | 2.44 s | 3.42 s |
-| Now | 1.49 s | 1.63 s |
+**At the agent** (from its decision log):
+
+| | Median reply | Slowest reply | Replies |
+|---|---|---|---|
+| Starting point: LiveKit defaults, Gemini 2.5 Flash | 2.44 s | 3.42 s | 38 |
+| Now | 1.81 s | 2.58 s | 63 (10 calls) |
+
+**On the phone:** about 2.8 s median on a recorded call. The caller reaches the agent
+over SIP from a free softphone on mobile internet, and that path adds roughly 1–1.5 s
+that the agent never sees. It's the next bottleneck.
 
 What moved it:
 
 - **The LLM stopped thinking before speaking.** Gemini 2.5 Flash thinks by default:
-  ~1.1 s to the first token; ~0.5–0.9 s with thinking off.
+  ~1.1 s to the first token; ~0.6–0.9 s with thinking off.
 - **Endpointing tuned.** A 1.3 s maximum wait was fast but cut callers off while they
   paused to think; dynamic endpointing with a 2.0 s cap didn't.
 - **A bare yes or no to a question ends the turn.** On phone audio, the audio turn
@@ -30,7 +37,7 @@ What moved it:
 A faster model (Qwen3.8-27B on Groq, ~0.16 s to first token) was tried and dropped: on
 real conversations its replies came back empty or cut off mid-sentence, with no error.
 
-Scale: one caller, a handful of calls.
+Scale: one caller, ten test calls.
 
 ## Turn-taking
 
