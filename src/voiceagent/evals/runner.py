@@ -239,6 +239,7 @@ async def eval_persona(
                     job_facts=job.criteria.job_facts.model_dump(mode="json"),
                     requirement_labels=[r.label for r in reqs],
                 )
+                meter.check()
                 rec["message"] = {
                     "kind": kind,
                     "subject": d.subject,

@@ -174,3 +174,20 @@ async def test_the_fairness_replays_are_scored_with_the_recruiter_overrides(tmp_
     r = await run(config(tmp_path, personas=3))
     fairness = [c["persona"]["key"] for c in r["calls"] if c["persona"]["key"].startswith("fair")]
     assert len(fairness) == 4 and all(corrected[k] for k in fairness)
+
+
+async def test_the_budget_is_checked_before_the_message_is_judged(tmp_path, monkeypatch):
+    meter = Meter(budget_usd=0.1)
+    real = OfflineModels.structured
+    judged = []
+
+    def costly_letter(self, schema, system, user):
+        if schema.__name__ == "Letter":
+            meter.add(FLASH, 1_000_000, 0)
+        if schema.__name__ == "MessageJudgement":
+            judged.append(user)
+        return real(self, schema, system, user)
+
+    monkeypatch.setattr(OfflineModels, "structured", costly_letter)
+    r = await run(config(tmp_path, personas=1, budget_usd=0.1), meter)
+    assert r["aborted"] and judged == []
