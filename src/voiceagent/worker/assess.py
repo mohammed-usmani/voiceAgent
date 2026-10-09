@@ -60,6 +60,29 @@ def _record(session: Session, call: Call, decision: Decision) -> None:
         enqueue(session, "draft_message", {"decision_id": str(decision.id)})
 
 
+def answered_consent(transcript: list[dict]) -> bool:
+    """Whether the candidate said anything after the greeting, which discloses the AI and
+    the recording and asks if now is a good time. A hang-up before that is no consent."""
+    roles = [t.get("role") for t in transcript]
+    return "agent" in roles and "candidate" in roles[roles.index("agent") + 1 :]
+
+
+def _unassessed(call: Call, summary: str, trace: list[dict]) -> Decision:
+    """A decision no model made: a recruiter decides from the call."""
+    return Decision(
+        candidate_id=call.candidate_id,
+        call_id=call.id,
+        criteria_version_id=call.criteria_version_id,
+        result="needs_review",
+        score=None,
+        hard_failures=[],
+        reasons=[],
+        summary=summary,
+        model="",
+        trace=trace,
+    )
+
+
 def postcall(session: Session, models: Models, task: Task) -> None:
     call_id = uuid.UUID(task.payload["call_id"])
     call = session.get(Call, call_id)
@@ -67,6 +90,12 @@ def postcall(session: Session, models: Models, task: Task) -> None:
         return
     if call.end_reason in NOT_ASSESSED:
         emit(session, "call", call.id, "not_assessed", {"end_reason": call.end_reason})
+        return
+    if call.end_reason == "candidate_hung_up" and not answered_consent(call.transcript or []):
+        summary = (
+            "The candidate hung up before answering the consent question; nothing was assessed."
+        )
+        _record(session, call, _unassessed(call, summary, [{"step": "no_consent"}]))
         return
     candidate = session.get(Candidate, call.candidate_id)
     job = session.get(Job, candidate.job_id)
@@ -131,19 +160,8 @@ def postcall_failed(session: Session, payload: dict, error: str) -> None:
     call = lock_call(session, uuid.UUID(payload["call_id"]))
     if call is None or call.end_reason in NOT_ASSESSED or _decided(session, call):
         return
-    decision = Decision(
-        candidate_id=call.candidate_id,
-        call_id=call.id,
-        criteria_version_id=call.criteria_version_id,
-        result="needs_review",
-        score=None,
-        hard_failures=[],
-        reasons=[],
-        summary=f"The assessment failed ({error[:300]}); read the transcript and decide.",
-        model="",
-        trace=[{"step": "error", "error": error[:2000]}],
-    )
-    _record(session, call, decision)
+    summary = f"The assessment failed ({error[:300]}); read the transcript and decide."
+    _record(session, call, _unassessed(call, summary, [{"step": "error", "error": error[:2000]}]))
 
 
 def draft_message(session: Session, models: Models, task: Task) -> None:

@@ -1,3 +1,4 @@
+import pytest
 from sqlalchemy import select, update
 
 from tests.fakes import FakeModels
@@ -190,6 +191,20 @@ def test_a_hang_up_mid_call_needs_review(engine, session):
     session.expire_all()
     d = session.scalars(select(Decision)).one()
     assert d.result == "needs_review" and "ended early" in d.summary
+    assert session.get(Candidate, call.candidate_id).status == "decided"
+
+
+@pytest.mark.parametrize("said", [[], TRANSCRIPT[:1]])
+def test_a_hang_up_before_answering_the_consent_question_is_not_assessed(engine, session, said):
+    call = postcall(session, end_reason="candidate_hung_up", transcript=said)
+    models = FakeModels(replies())
+    drain(engine, models)
+    session.expire_all()
+    assert models.prompts == []  # no model reads a call the candidate never agreed to
+    d = session.scalars(select(Decision)).one()
+    assert (d.result, d.reasons) == ("needs_review", [])
+    assert "before answering" in d.summary
+    assert session.scalars(select(Answer)).all() == []
     assert session.get(Candidate, call.candidate_id).status == "decided"
 
 
