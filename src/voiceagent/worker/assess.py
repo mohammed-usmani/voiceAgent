@@ -29,7 +29,7 @@ from voiceagent.events import emit
 from voiceagent.knowledge.store import search_overrides
 from voiceagent.llm import Models
 from voiceagent.worker.queue import enqueue, heartbeat
-from voiceagent.worker.send import queue_send
+from voiceagent.worker.send import already_emailed, hold_for_review, queue_send
 
 # Calls that end before any screening: nothing to assess. The candidate's status already
 # says why (declined_consent, callback).
@@ -229,7 +229,10 @@ def draft_message(session: Session, models: Models, task: Task) -> None:
         and not d.issues
     )
     if auto_send:
-        queue_send(session, decision, message)
+        if already_emailed(session, candidate.id, message.id):
+            hold_for_review(decision, message)
+        else:
+            queue_send(session, decision, message, auto=True)
 
 
 def draft_message_failed(session: Session, payload: dict, error: str) -> None:

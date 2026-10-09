@@ -3,9 +3,9 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 
 from tests.fakes import FakeModels
-from tests.seed import seed_decision, seed_finished_call, seed_message
+from tests.seed import seed_call, seed_decision, seed_finished_call, seed_message
 from voiceagent.db.base import make_sessionmaker
-from voiceagent.db.models import Candidate, Decision, Event, Message, Task
+from voiceagent.db.models import Call, Candidate, CriteriaVersion, Decision, Event, Message, Task
 from voiceagent.outcomes.email import LogMailer
 from voiceagent.worker.main import run_once
 from voiceagent.worker.queue import LEASE
@@ -100,4 +100,30 @@ def test_lease_lost_on_the_last_attempt_fails_the_message(engine, session, maile
     run_once(make_sessionmaker(engine), FakeModels())
     session.expire_all()
     assert session.get(Message, message.id).status == "failed"
+    assert mailer.sent == []
+
+
+def seed_finished_call_for(session, decision):
+    first = session.get(Call, decision.call_id)
+    return seed_call(
+        session,
+        session.get(Candidate, first.candidate_id),
+        session.get(CriteriaVersion, first.criteria_version_id),
+        status="completed",
+    )
+
+
+def test_an_auto_send_is_refused_when_the_candidate_was_already_emailed(engine, session, mailer):
+    decision, message = queued_message(session, kind="invite")
+    task = session.scalars(select(Task)).one()
+    task.payload = {**task.payload, "auto": True}
+    old_call = seed_finished_call_for(session, decision)
+    old = seed_decision(session, old_call)
+    seed_message(session, old, status="sent")
+    run_once(make_sessionmaker(engine), FakeModels())
+    session.expire_all()
+    assert session.get(Message, message.id).status == "draft"
+    d = session.get(Decision, decision.id)
+    assert (d.status, "already emailed" in d.summary) == ("pending_review", True)
+    assert session.get(Candidate, decision.candidate_id).status == "decided"
     assert mailer.sent == []

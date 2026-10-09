@@ -31,12 +31,41 @@ def mailer() -> Mailer:
     return MAILER
 
 
-def queue_send(session: Session, decision: Decision, message: Message) -> None:
-    """Approve the decision and queue its message for sending. Not committed."""
+NOT_AUTO = "Not sent automatically: the candidate was already emailed about this job."
+
+
+def already_emailed(session: Session, candidate_id: uuid.UUID, except_message: uuid.UUID) -> bool:
+    """Whether another message to the candidate has gone out (or may have: `sending`)."""
+    return (
+        session.scalar(
+            select(Message.id)
+            .join(Decision, Message.decision_id == Decision.id)
+            .where(
+                Decision.candidate_id == candidate_id,
+                Message.id != except_message,
+                Message.status.in_(("sent", "sending")),
+            )
+        )
+        is not None
+    )
+
+
+def hold_for_review(decision: Decision, message: Message) -> None:
+    message.status = "draft"
+    decision.status = "pending_review"
+    decision.summary = f"{decision.summary} {NOT_AUTO}".strip()
+
+
+def queue_send(
+    session: Session, decision: Decision, message: Message, *, auto: bool = False
+) -> None:
+    """Approve the decision and queue its message for sending. Not committed. `auto`: no
+    recruiter chose this, so `send_message` re-checks that nothing was sent meanwhile."""
     message.status = "queued"
     message.error = None
     decision.status = "approved"
-    enqueue(session, "send_message", {"message_id": str(message.id)})
+    payload = {"message_id": str(message.id)} | ({"auto": True} if auto else {})
+    enqueue(session, "send_message", payload)
     emit(session, "message", message.id, "queued", {"decision_id": str(decision.id)})
 
 
@@ -77,6 +106,12 @@ def send_message(session: Session, models: Models, task: Task) -> None:
         return
     if message.status != "queued":
         return
+    if task.payload.get("auto"):
+        decision = session.get(Decision, message.decision_id)
+        if already_emailed(session, decision.candidate_id, message.id):
+            hold_for_review(decision, message)
+            emit(session, "message", message.id, "held", {"decision_id": str(decision.id)})
+            return
     message.status = "sending"
     email = Email(to=message.to, subject=message.subject, body=message.body)
     session.commit()  # visible before the send, so a rerun can tell it was attempted

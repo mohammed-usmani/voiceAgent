@@ -2,7 +2,7 @@ import pytest
 from sqlalchemy import select, update
 
 from tests.fakes import FakeModels
-from tests.seed import TRANSCRIPT, seed_finished_call
+from tests.seed import TRANSCRIPT, seed_call, seed_decision, seed_finished_call, seed_message
 from voiceagent.agents.assessment import Evidence, EvidenceSet, Review, SoftScore, SoftScores
 from voiceagent.agents.messages import Flag, InviteCheck, Letter, RejectionCheck
 from voiceagent.db.base import make_sessionmaker
@@ -10,6 +10,7 @@ from voiceagent.db.models import (
     Answer,
     Call,
     Candidate,
+    CriteriaVersion,
     Decision,
     Event,
     Message,
@@ -297,3 +298,25 @@ def test_a_candidate_deleted_mid_assessment_leaves_nothing(engine, session):
     assert session.scalars(select(Call)).all() == []
     assert session.scalars(select(Decision)).all() == []
     assert session.scalars(select(Task)).one().status == "done"
+
+
+@pytest.mark.parametrize("prior", ["sent", "sending"])
+def test_a_candidate_already_emailed_is_not_auto_invited(engine, session, mailer, prior):
+    call = postcall(session)
+    old_call = seed_call(
+        session,
+        session.get(Candidate, call.candidate_id),
+        session.get(CriteriaVersion, call.criteria_version_id),
+        status="completed",
+    )
+    old = seed_decision(session, old_call, status="sent")
+    seed_message(session, old, status=prior)
+    drain(engine, FakeModels(replies()))
+    session.expire_all()
+    d = session.scalars(select(Decision).where(Decision.call_id == call.id)).one()
+    assert (d.result, d.status) == ("suitable", "pending_review")
+    assert "already emailed" in d.summary
+    assert (
+        session.scalars(select(Message).where(Message.decision_id == d.id)).one().status == "draft"
+    )
+    assert mailer.sent == []
