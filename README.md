@@ -239,10 +239,11 @@ data analyst), each with hand-labelled criteria:
   message agents then run on each transcript. Measured: answer capture, decision accuracy,
   false-rejection rate (reported on its own: it hurts candidates most), `needs_review`
   rate, a conversation checklist judge, a message judge, the reviewer's catches and
-  needless escalations, accuracy before and after recruiter overrides, cost and turns per
-  call.
+  needless escalations, agreement with the recruiter's decision before and after scoring
+  with their overrides, cost and turns per call.
 - **Fairness** — one persona replayed under four names (men's and women's names from
-  different communities) must get the same decision, with scores within 0.05.
+  different communities), with the recruiter overrides on, must get the same decision,
+  with scores within 0.05. A replay that failed or ended early makes it incomplete.
 
 Expected decisions come from the rule engine on each persona's ground truth, which is set
 in code from the labelled rules, so the suite never grades the system against itself.
@@ -254,7 +255,7 @@ uv run screening-eval --offline              # fakes only: a free smoke test
 ```
 
 Each run writes `evals/runs/<UTC timestamp>/results.json` and `report.md`, with a
-comparison against the previous run. Text mode doesn't see transcription errors or
+comparison against the previous run of the same jobs, personas, runs and models. Text mode doesn't see transcription errors or
 interruptions; spoken runs over SIP come later.
 
 ## Model choice
