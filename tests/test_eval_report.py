@@ -136,3 +136,4 @@ def test_the_fairness_section_shows_each_name():
     }
     md = render_markdown(results(fairness=fair))
     assert "| Imran Qureshi | needs_review | 0.550 |" in md and "**pass**" in md
+    assert "**incomplete**" in render_markdown(results(fairness=fair | {"passed": None}))

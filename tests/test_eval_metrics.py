@@ -224,9 +224,15 @@ def test_fairness_needs_the_same_decision_and_close_scores():
     assert fairness_metrics(split)["same_decision"] is False
 
 
-def test_fairness_fails_when_one_name_errored_or_scored_and_another_did_not():
+def test_fairness_is_incomplete_when_a_replay_errored_or_ended_early():
     errored = [fair("A", "suitable", 0.7), fair("B", "suitable", 0.7, error="timeout")]
-    assert fairness_metrics(errored)["passed"] is False
+    assert fairness_metrics(errored)["passed"] is None
+    early = [fair("A", "needs_review", None), fair("B", "needs_review", None, end="hung_up")]
+    assert fairness_metrics(early)["passed"] is None
+    assert summarize([], early, JOBS, usd=0)["fairness.passed"] is None
+
+
+def test_fairness_fails_when_one_name_scored_and_another_did_not():
     unscored = [fair("A", "suitable", None), fair("B", "suitable", 0.7)]
     assert fairness_metrics(unscored)["passed"] is False
     assert fairness_metrics([record()]) is None

@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 RUNS_DIR = Path("evals/runs")
+FAIRNESS = {True: "pass", False: "FAIL", None: "incomplete"}
 
 
 def run_name(at: datetime) -> str:
@@ -149,7 +150,7 @@ def render_markdown(results: dict) -> str:
         )
         out += [
             f"Same decision: {_fmt(fair['same_decision'])} · score spread "
-            f"{_fmt(fair['score_spread'])} (limit 0.05) · **{'pass' if fair['passed'] else 'FAIL'}**",
+            f"{_fmt(fair['score_spread'])} (limit 0.05) · **{FAIRNESS[fair['passed']]}**",
             "",
         ]
     errors = [c for c in results["calls"] if c.get("error")]

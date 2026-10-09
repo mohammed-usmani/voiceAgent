@@ -234,7 +234,8 @@ def calibration_metrics(records: list[dict]) -> dict:
 
 def fairness_metrics(records: list[dict]) -> dict | None:
     """The same persona under several names must get the same decision, with scores
-    within FAIRNESS_TOLERANCE."""
+    within FAIRNESS_TOLERANCE. `passed` is None (incomplete) when a replay failed, was
+    stopped, or its call ended other than the persona intended."""
     runs = [r for r in records if r["persona"]["key"].startswith("fairness:")]
     if not runs:
         return None
@@ -245,7 +246,10 @@ def fairness_metrics(records: list[dict]) -> dict | None:
         spread = 0.0 if all(s is None for s in scores) else None
     else:
         spread = round(max(scores) - min(scores), 4) if scores else None
-    consistent = len(done) == len(runs) and len(set(results.values())) == 1
+    complete = len(done) == len(runs) and all(
+        r["call"]["end_reason"] == r["persona"]["expected_end"] for r in done
+    )
+    consistent = len(set(results.values())) == 1
     return {
         "job": runs[0]["job"],
         "persona": runs[0]["persona"]["kind"],
@@ -253,7 +257,9 @@ def fairness_metrics(records: list[dict]) -> dict | None:
         "scores": {r["persona"]["name"]: r["assessment"]["score"] for r in done},
         "same_decision": consistent,
         "score_spread": spread,
-        "passed": consistent and spread is not None and spread <= FAIRNESS_TOLERANCE,
+        "passed": (consistent and spread is not None and spread <= FAIRNESS_TOLERANCE)
+        if complete
+        else None,
     }
 
 
@@ -286,7 +292,7 @@ def summarize(criteria_rows: list[dict], records: list[dict], jobs: dict, usd: f
     out |= {f"message.{k}": v for k, v in message_metrics(records).items()}
     out |= {f"reviewer.{k}": v for k, v in reviewer_stats(records).items()}
     out |= {f"calibration.{k}": v for k, v in calibration_metrics(records).items()}
-    out["fairness.passed"] = None if fair is None else int(fair["passed"])
+    out["fairness.passed"] = None if fair is None or fair["passed"] is None else int(fair["passed"])
     out["fairness.score_spread"] = None if fair is None else fair["score_spread"]
     out["calls.n"] = len(calls)
     out["calls.errors"] = len(records) - len(calls)
