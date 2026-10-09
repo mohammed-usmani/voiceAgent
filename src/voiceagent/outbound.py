@@ -2,12 +2,14 @@
 
     uv run voiceagent-call                          # calls CALL_TO from .env
     uv run voiceagent-call candidate@sip.linphone.org
+    uv run voiceagent-call +919876543210            # through SIP_OUTBOUND_TRUNK_ID
 
 A free linphone.org account works as the callee, so no phone number has to be bought.
 The outbound trunk for the callee's SIP host is created on first use.
 """
 
 import asyncio
+import contextlib
 import os
 import secrets
 import sys
@@ -72,12 +74,16 @@ async def dial(
     """Ring `address` and, once answered, send the agent into `room` with `metadata`.
 
     `address` is a phone number (+E.164, through the trunk in SIP_OUTBOUND_TRUNK_ID) or a
-    SIP address (through a per-host trunk created on first use). Raises api.SipCallError
-    when the call isn't answered (busy, no answer, declined: see `sip_status_code`).
+    SIP address, anything with an "@" (through a per-host trunk created on first use).
+    Raises api.SipCallError when the call isn't answered (busy, no answer, declined: see
+    `sip_status_code`).
     """
-    lk = api.LiveKitAPI()
+    # failover=False: the SDK would otherwise replay a timed-out or failed request to
+    # another region (livekit/api/livekit_api.py:35, _failover.py:32), and a replayed
+    # CreateSIPParticipant rings the candidate a second time.
+    lk = api.LiveKitAPI(failover=False)
     try:
-        if address.startswith("+"):
+        if "@" not in address:
             trunk_id = os.environ.get("SIP_OUTBOUND_TRUNK_ID", "")
             if not trunk_id:
                 raise RuntimeError("set SIP_OUTBOUND_TRUNK_ID to call phone numbers")
@@ -86,9 +92,16 @@ async def dial(
             to, host = parse_address(address)
             trunk_id = await trunk_for(lk, host)
         await lk.sip.create_sip_participant(dial_request(trunk_id, to, room, display_name))
-        await lk.agent_dispatch.create_dispatch(
-            api.CreateAgentDispatchRequest(agent_name=AGENT_NAME, room=room, metadata=metadata)
-        )
+        try:
+            await lk.agent_dispatch.create_dispatch(
+                api.CreateAgentDispatchRequest(agent_name=AGENT_NAME, room=room, metadata=metadata)
+            )
+        except Exception:
+            # They answered but no agent is coming: hang up rather than leave them on a
+            # silent line. The dispatch error is the one worth raising.
+            with contextlib.suppress(Exception):
+                await lk.room.delete_room(api.DeleteRoomRequest(room=room))
+            raise
     finally:
         await lk.aclose()
 

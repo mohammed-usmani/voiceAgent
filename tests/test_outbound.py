@@ -36,11 +36,23 @@ class FakeLiveKit:
     def __init__(self):
         self.requests = []
         self.closed = False
+        self.options = None
+        self.dispatch_error = None
+        self.deleted_rooms = []
         self.sip = SimpleNamespace(
             list_outbound_trunk=self._trunks,
             create_sip_participant=self._record,
         )
-        self.agent_dispatch = SimpleNamespace(create_dispatch=self._record)
+        self.agent_dispatch = SimpleNamespace(create_dispatch=self._dispatch)
+        self.room = SimpleNamespace(delete_room=self._delete_room)
+
+    async def _dispatch(self, req):
+        if self.dispatch_error:
+            raise self.dispatch_error
+        self.requests.append(req)
+
+    async def _delete_room(self, req):
+        self.deleted_rooms.append(req.room)
 
     async def _trunks(self, _req):
         trunk = SimpleNamespace(name="outbound-sip.linphone.org", sip_trunk_id="ST_linphone")
@@ -56,7 +68,12 @@ class FakeLiveKit:
 @pytest.fixture
 def livekit(monkeypatch):
     lk = FakeLiveKit()
-    monkeypatch.setattr(outbound.api, "LiveKitAPI", lambda: lk)
+
+    def make(**options):
+        lk.options = options
+        return lk
+
+    monkeypatch.setattr(outbound.api, "LiveKitAPI", make)
     return lk
 
 
@@ -94,3 +111,25 @@ async def test_dial_phone_number_without_a_trunk_fails_before_ringing(livekit, m
     with pytest.raises(RuntimeError, match="SIP_OUTBOUND_TRUNK_ID"):
         await outbound.dial("+919876543210", "screen-3")
     assert livekit.requests == [] and livekit.closed
+
+
+async def test_dial_is_never_replayed_to_another_region(livekit):
+    # I5: the SDK's failover would resend CreateSIPParticipant and ring the candidate twice.
+    await outbound.dial("priya@sip.linphone.org", "screen-4")
+    assert livekit.options == {"failover": False}
+
+
+async def test_a_failed_dispatch_hangs_up_the_answered_call(livekit):
+    # M4: the candidate picked up but no agent is coming: don't leave them on a silent line.
+    livekit.dispatch_error = RuntimeError("dispatch refused")
+    with pytest.raises(RuntimeError, match="dispatch refused"):
+        await outbound.dial("priya@sip.linphone.org", "screen-5")
+    assert livekit.deleted_rooms == ["screen-5"] and livekit.closed
+
+
+async def test_a_sip_address_with_a_phone_style_user_goes_to_its_host(livekit, monkeypatch):
+    # M5: "+15551234@sip.example.com" is a SIP address, not a phone number.
+    monkeypatch.setenv("SIP_OUTBOUND_TRUNK_ID", "ST_pstn")
+    await outbound.dial("+15551234@sip.linphone.org", "screen-6")
+    participant = livekit.requests[0]
+    assert (participant.sip_trunk_id, participant.sip_call_to) == ("ST_linphone", "+15551234")
