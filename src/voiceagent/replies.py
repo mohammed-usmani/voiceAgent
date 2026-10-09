@@ -75,37 +75,39 @@ def clean_history(chat_ctx: llm.ChatContext) -> llm.ChatContext:
     return llm.ChatContext(items)
 
 
-def _has_text(chunk) -> bool:
+def _answered(chunk) -> bool:
+    """Words to speak, or a tool call: either way the model replied."""
     if isinstance(chunk, str):
         return bool(chunk.strip())
     delta = getattr(chunk, "delta", None)
-    return bool(delta and delta.content and delta.content.strip())
+    return bool(delta and ((delta.content and delta.content.strip()) or delta.tool_calls))
 
 
 class ReliableAgent(Agent):
     """An agent whose reply never comes back empty.
 
     An empty reply (returned without any error) once left the agent silent for the rest
-    of a call, so an empty or failed reply is retried once on the backup model.
+    of a call, so an empty or failed reply is retried once on the backup model. A reply
+    that is only a tool call (end_call) is not empty.
     """
 
-    def __init__(self, *, instructions: str) -> None:
+    def __init__(self, *, instructions: str, backup: llm.LLM | None = None) -> None:
         super().__init__(instructions=instructions)
-        self._backup = backup_llm()
+        self._backup = backup if backup is not None else backup_llm()
 
     async def llm_node(self, chat_ctx, tools, model_settings):
         chat_ctx = clean_history(chat_ctx)
-        spoke = False
+        answered = False
         try:
             async for chunk in Agent.default.llm_node(self, chat_ctx, tools, model_settings):
-                spoke = spoke or _has_text(chunk)
+                answered = answered or _answered(chunk)
                 yield chunk
         except Exception:
-            if spoke:
+            if answered:
                 raise
             logger.exception("main LLM failed; answering with the backup")
         else:
-            if spoke:
+            if answered:
                 return
             logger.warning("main LLM replied with nothing; answering with the backup")
         async with self._backup.chat(chat_ctx=chat_ctx, tools=tools) as stream:

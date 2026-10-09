@@ -102,3 +102,26 @@ async def test_good_main_reply_is_used_as_is(monkeypatch):
     assert await reply_when_main_llm(monkeypatch, good) == [
         "Great, how many years of experience do you have?"
     ]
+
+
+async def test_reply_that_is_only_a_tool_call_is_not_empty(monkeypatch):
+    # end_call with no words is a complete reply: asking the backup would answer twice.
+    from livekit.agents import llm
+
+    end = llm.FunctionToolCall(name="end_call", arguments='{"reason": "completed"}', call_id="c1")
+    chunk = llm.ChatChunk(id="x", delta=llm.ChoiceDelta(role="assistant", tool_calls=[end]))
+
+    async def tool_only(*_args):
+        yield chunk
+
+    assert await reply_when_main_llm(monkeypatch, tool_only) == [chunk]
+
+
+def test_backup_model_can_be_given(monkeypatch):
+    # The text-mode harness passes its own model; building the default needs an API key.
+    monkeypatch.delenv("TOGETHER_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    from voiceagent.replies import ReliableAgent
+
+    backup = FakeBackup()
+    assert ReliableAgent(instructions="test", backup=backup)._backup is backup
