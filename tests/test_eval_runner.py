@@ -158,3 +158,19 @@ async def test_a_hang_up_before_consent_is_sent_to_review_without_assessing(tmp_
     assert rec["call"]["end_reason"] == "candidate_hung_up" and rec["call"]["turns"] == 0
     assert rec["assessment"]["result"] == "needs_review" and rec["assessment"]["answers"] == []
     assert rec["message"] is None and rec["judgement"] is not None
+
+
+async def test_the_fairness_replays_are_scored_with_the_recruiter_overrides(tmp_path, monkeypatch):
+    real = OfflineModels.structured
+    corrected: dict[str, bool] = {}
+
+    def spy(self, schema, system, user):
+        if schema.__name__ == "SoftScores":
+            key = self.persona.key
+            corrected[key] = corrected.get(key, False) or "recruiter_corrections" in user
+        return real(self, schema, system, user)
+
+    monkeypatch.setattr(OfflineModels, "structured", spy)
+    r = await run(config(tmp_path, personas=3))
+    fairness = [c["persona"]["key"] for c in r["calls"] if c["persona"]["key"].startswith("fair")]
+    assert len(fairness) == 4 and all(corrected[k] for k in fairness)

@@ -214,10 +214,11 @@ async def eval_persona(
                     auto_send=True,  # jobs auto-send invites by default: the reviewer checks them
                 )
 
-            a = assess(lambda r: [])
+            # the fairness replays run as production would, with the recruiter's overrides
+            fairness_replay = persona.key.startswith("fairness:")
+            a = assess(overrides_lookup(job) if fairness_replay else lambda r: [])
             rec["assessment"] = _assessment(a)
             extracted = {e.requirement_id: e.value for e in a.answers}
-            fairness_replay = persona.key.startswith("fairness:")
             if (
                 persona.kind in CALIBRATION_KINDS
                 and job.overrides
