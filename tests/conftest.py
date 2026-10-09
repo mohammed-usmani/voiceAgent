@@ -14,7 +14,7 @@ TEST_URL = os.environ.get(
 )
 TABLES = (
     "jobs, criteria_versions, knowledge, tasks, events, candidates, calls, answers, decisions, "
-    "messages"
+    "messages, campaigns"
 )
 
 

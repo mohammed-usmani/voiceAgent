@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 import pytest
 from alembic import command
 from alembic.config import Config
@@ -13,7 +15,7 @@ from tests.seed import (
     seed_job,
     seed_message,
 )
-from voiceagent.db.models import Answer, Call, Candidate, Decision, Job, Message
+from voiceagent.db.models import Answer, Call, Campaign, Candidate, Decision, Job, Message
 
 
 def test_migration_creates_tables_and_vector_extension(session):
@@ -116,3 +118,26 @@ def test_answer_and_decision_defaults(session):
         None,
     )
     assert decision.trace == []
+
+
+def test_a_candidate_can_have_only_one_active_call(session):
+    # Review focus 2: whatever races past the application's checks, the database refuses
+    # a second queued/ringing/in-progress call for the same candidate.
+    job, cv = seed_job(session)
+    candidate = seed_candidate(session, job)
+    seed_call(session, candidate, cv, status="in_progress")
+    with pytest.raises(IntegrityError):
+        seed_call(session, candidate, cv, attempt=2, status="queued")
+    session.rollback()
+    seed_call(session, candidate, cv, attempt=2, status="no_answer")  # finished calls: any number
+
+
+def test_campaign_defaults_and_cascade_on_job_delete(session):
+    job, _ = seed_job(session)
+    session.add(Campaign(job_id=job.id, started_at=datetime.now(UTC)))
+    session.commit()
+    campaign = session.get(Campaign, job.id)
+    assert (campaign.status, campaign.max_concurrent) == ("active", 2)
+    session.delete(job)
+    session.commit()
+    assert session.scalars(select(Campaign)).all() == []

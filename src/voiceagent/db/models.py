@@ -15,6 +15,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -126,11 +127,16 @@ class Event(Base):
 ACTIVE_CALL_STATUSES = ("queued", "ringing", "in_progress")
 # A candidate in one of these states is done with calls; calling again needs force.
 FINISHED_CANDIDATE_STATUSES = ("screened", "decided", "notified", "declined_consent", "withdrawn")
+# Calls that never became a conversation. After MAX_UNANSWERED of them the candidate is
+# `unreachable` and campaigns stop calling them (a recruiter can still call by hand).
+UNANSWERED_CALL_STATUSES = ("no_answer", "voicemail", "failed")
+MAX_UNANSWERED = 3
 
 
 class Candidate(Timestamps, Base):
     """Someone to screen for a job. Status: pending → calling → screened → decided →
-    notified, or no_answer, callback, declined_consent, withdrawn."""
+    notified, or no_answer, callback, declined_consent, withdrawn, unreachable (MAX_UNANSWERED
+    calls nobody answered)."""
 
     __tablename__ = "candidates"
     __table_args__ = (
@@ -151,9 +157,20 @@ class Candidate(Timestamps, Base):
 
 class Call(Timestamps, Base):
     """One call to a candidate. Status: queued → ringing → in_progress → completed, or
-    no_answer, failed. Deleting the candidate deletes their calls and transcripts."""
+    no_answer, voicemail, failed. Deleting the candidate deletes their calls and transcripts.
+    At most one active call per candidate, enforced by the database too."""
 
     __tablename__ = "calls"
+    __table_args__ = (
+        Index(
+            "uq_calls_one_active_per_candidate",
+            "candidate_id",
+            unique=True,
+            postgresql_where=text(
+                "status IN (" + ", ".join(f"'{s}'" for s in ACTIVE_CALL_STATUSES) + ")"
+            ),
+        ),
+    )
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     candidate_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("candidates.id", ondelete="CASCADE"), index=True
@@ -163,7 +180,7 @@ class Call(Timestamps, Base):
     attempt: Mapped[int] = mapped_column(Integer, default=1)
     status: Mapped[str] = mapped_column(String(20), default="queued")
     # completed · declined_consent · callback_requested · not_interested (the agent's
-    # end_call), candidate_hung_up · error (set by code)
+    # end_call), candidate_hung_up · voicemail · error (set by code)
     end_reason: Mapped[str | None] = mapped_column(String(30))
     callback_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     consent_given: Mapped[bool | None] = mapped_column(Boolean)
@@ -175,6 +192,22 @@ class Call(Timestamps, Base):
     # The candidate's status when this call was queued, restored if the call never becomes
     # a conversation (a failed re-call of a screened candidate keeps them screened).
     prior_candidate_status: Mapped[str | None] = mapped_column(String(30))
+
+
+class Campaign(Timestamps, Base):
+    """Background calling of a job's candidates (worker.campaign.tick). Status: active ⇄
+    paused; → done once no candidate can be called again. Starting it again reopens it."""
+
+    __tablename__ = "campaigns"
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("jobs.id", ondelete="CASCADE"), primary_key=True
+    )
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    # Calls of this job in progress at once (queued, ringing or talking), manual ones included.
+    max_concurrent: Mapped[int] = mapped_column(Integer, default=2, server_default="2")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Answer(Timestamps, Base):
