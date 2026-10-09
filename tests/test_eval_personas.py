@@ -127,6 +127,14 @@ def test_the_persona_agent_cannot_overwrite_a_hard_answer_or_invent_one():
     assert "strong" in system and '"Backend Python experience": 5' in user
 
 
+def test_a_soft_number_answer_must_parse_as_a_number():
+    answers = dict(sql_depth="Indexed a slow join.", api_design="Built the payouts API.")
+    good = FakeModels({PersonaDraft: [draft(expected_ctc="1,200", **answers)]})
+    assert make_persona(good, SE, "clear_fit", "Ananya Rao").truth["expected_ctc"] == 1200
+    bad = FakeModels({PersonaDraft: [draft(expected_ctc="about 24 lakh", **answers)]})
+    assert make_persona(bad, SE, "clear_fit", "Ananya Rao").truth["expected_ctc"] is None
+
+
 def test_declining_salary_hides_it_from_the_persona_agent():
     answers = dict(sql_depth="Indexed a slow join.", api_design="Built the payouts API.")
     models = FakeModels({PersonaDraft: [draft(expected_ctc=30, **answers)]})

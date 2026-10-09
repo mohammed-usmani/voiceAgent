@@ -69,6 +69,18 @@ class PersonaDraft(BaseModel):
     soft_answers: list[SoftAnswer]
 
 
+def as_number(v) -> float | None:
+    """A number as a model may write it ("1,200", "5"), or None."""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, int | float):
+        return float(v)
+    try:
+        return float(str(v).replace(",", "").strip())
+    except (TypeError, ValueError):
+        return None
+
+
 def _num(v: float) -> float | int:
     return int(v) if float(v).is_integer() else round(v, 2)
 
@@ -242,10 +254,17 @@ def make_persona(models: Models, job: RefJob, key: str, name: str) -> Persona:
     )
     quality = QUALITY.get(kind, "strong - each answer fully meets its rubric")
     draft = models.structured(PersonaDraft, PERSONA_WRITER.format(quality=quality), user)
-    ids = {r.id for r in soft} - set(declined)
+    allowed = {r.id: r for r in soft if r.id not in declined}
     for a in draft.soft_answers:
-        if a.requirement_id in ids:
-            truth[a.requirement_id] = a.value
+        r = allowed.get(a.requirement_id)
+        if r is None:
+            continue
+        if r.kind == "number":  # a number the persona can't say plainly is left unanswered
+            n = as_number(a.value)
+            if n is not None:
+                truth[r.id] = _num(n)
+        else:
+            truth[r.id] = a.value
     for r in reqs:
         truth.setdefault(r.id, None)
     end, decision = expected_outcome(kind, reqs, truth, declined)

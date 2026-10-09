@@ -15,6 +15,7 @@ from statistics import mean
 from voiceagent.criteria.schema import Criteria, Requirement, Rule
 from voiceagent.evals.jobs import RefJob
 from voiceagent.evals.judges import CHECKS, ILLEGAL
+from voiceagent.evals.personas import as_number
 
 FAIRNESS_TOLERANCE = 0.05
 
@@ -77,17 +78,6 @@ def criteria_metrics(
     }
 
 
-def _number(v) -> float | None:
-    if isinstance(v, bool):
-        return None
-    if isinstance(v, int | float):
-        return float(v)
-    try:
-        return float(str(v).replace(",", "").strip())
-    except (TypeError, ValueError):
-        return None
-
-
 def _boolean(v) -> bool | None:
     if isinstance(v, bool):
         return v
@@ -106,7 +96,7 @@ def answer_correct(r: Requirement, truth, declined: bool, answer: dict | None, t
     if got is None:
         return False
     if r.kind == "number":
-        a, b = _number(got), _number(truth)
+        a, b = as_number(got), as_number(truth)
         return a is not None and b is not None and abs(a - b) <= max(0.5, 0.1 * abs(b))
     if r.kind == "boolean":
         return _boolean(got) is not None and _boolean(got) == _boolean(truth)
