@@ -1,5 +1,3 @@
-import gc
-
 import pytest
 from pydantic import BaseModel
 
@@ -69,7 +67,14 @@ def test_embed_delegates():
     assert models(FakeChat(), FakeChat()).embed(["ab", "c"]) == [[2.0], [1.0]]
 
 
-def test_default_clients_run_on_together_and_leave_retries_to_fallback_models():
+@pytest.fixture
+def no_local_model(monkeypatch):
+    """default_models would load the real bge model (an onnxruntime session whose native
+    threads abort the interpreter at exit, now and then): use a stand-in."""
+    monkeypatch.setattr("voiceagent.llm.LocalEmbedder", lambda *a, **kw: object())
+
+
+def test_default_clients_run_on_together_and_leave_retries_to_fallback_models(no_local_model):
     settings = Settings(database_url="", api_key="", together_api_key="t")
     m = default_models(settings)
     (_, main), _, (_, backup) = m._attempts
@@ -103,22 +108,7 @@ def test_embed_query_uses_the_query_embedding():
     assert models(FakeChat(), FakeChat()).embed_query("abc") == [-3.0]
 
 
-def test_local_embedder_makes_768_dim_query_and_document_vectors():
-    from voiceagent.llm import LocalEmbedder
-
-    e = LocalEmbedder()
-    docs = e.embed_documents(["Python backend experience", "Forklift licence"])
-    query = e.embed_query("years of Python")
-    assert [len(v) for v in docs] == [768, 768] and len(query) == 768
-    similarity = [sum(a * b for a, b in zip(query, d, strict=True)) for d in docs]
-    assert similarity[0] > similarity[1]
-    # Free the onnxruntime session now: left to interpreter exit, its thread pool tears down
-    # racily and aborts the process ("libc++abi: ... mutex lock failed", exit 134).
-    del e
-    gc.collect()
-
-
-def test_reviewer_runs_on_its_own_model_with_the_same_backup():
+def test_reviewer_runs_on_its_own_model_with_the_same_backup(no_local_model):
     settings = Settings(database_url="", api_key="", together_api_key="t")
     m = default_models(settings)
     (_, reviewer), _, (_, backup) = m.reviewer._attempts
