@@ -50,3 +50,11 @@ def test_a_label_that_quotes_words_not_in_the_description_is_rejected(tmp_path: 
     bad.write_text(text.replace(source, "source: At least 7 years of SQL in any role"))
     with pytest.raises(ValueError, match="sql_years: source not in the description"):
         load_job(bad)
+
+
+def test_an_override_for_a_requirement_the_job_lacks_is_rejected(tmp_path: Path):
+    text = Path("evals/jobs/data-analyst.yaml").read_text()
+    bad = tmp_path / "bad.yaml"
+    bad.write_text(text.replace("- requirement_id: ab_testing", "- requirement_id: nope"))
+    with pytest.raises(ValueError, match="override for unknown requirement 'nope'"):
+        load_job(bad)

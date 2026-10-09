@@ -51,6 +51,12 @@ def load_job(path: Path) -> RefJob:
         for line in job.illegal
         if line not in job.description
     ]
+    ids = {r.id for r in job.criteria.requirements}
+    errors += [
+        f"override for unknown requirement {o.requirement_id!r}"
+        for o in job.overrides
+        if o.requirement_id not in ids
+    ]
     if errors:
         raise ValueError(f"{path.name}: " + "; ".join(errors))
     return job.model_copy(update={"criteria": normalize_weights(job.criteria)})
