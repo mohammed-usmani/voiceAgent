@@ -98,7 +98,10 @@ def send_message(session: Session, models: Models, task: Task) -> None:
     decision = session.get(Decision, message.decision_id)
     decision.status = "sent"
     session.get(Candidate, decision.candidate_id).status = "notified"
-    emit(session, "message", message.id, "sent", {"decision_id": str(decision.id)})
+    data = {"decision_id": str(decision.id)}
+    if not getattr(mailer(), "delivers", True):
+        data["delivered"] = False  # development: only logged
+    emit(session, "message", message.id, "sent", data)
 
 
 def send_message_failed(session: Session, payload: dict, error: str) -> None:

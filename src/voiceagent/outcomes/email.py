@@ -21,12 +21,20 @@ class Email:
     body: str
 
 
+class MaybeSent(Exception):
+    """The connection failed after the server may already have taken the mail."""
+
+
 class Mailer(Protocol):
+    delivers: bool  # False when nothing leaves the machine
+
     def send(self, email: Email) -> None:
         """Deliver or raise."""
 
 
 class SmtpMailer:
+    delivers = True
+
     def __init__(
         self,
         host: str,
@@ -51,23 +59,39 @@ class SmtpMailer:
             smtp = smtplib.SMTP_SSL(self.host, self.port, timeout=SMTP_TIMEOUT_S, context=context)
         else:
             smtp = smtplib.SMTP(self.host, self.port, timeout=SMTP_TIMEOUT_S)
-        with smtp:
+        try:
             if self.starttls and self.port != 465:
                 smtp.starttls(context=context)
             if self.username:
                 smtp.login(self.username, self.password)
-            smtp.send_message(msg)
+            try:
+                smtp.send_message(msg)
+            except (smtplib.SMTPServerDisconnected, TimeoutError, ConnectionError) as e:
+                # A refusal is an answer; a dropped line isn't: the end of DATA may have landed.
+                raise MaybeSent(
+                    f"the connection failed while sending ({e!r}); check it wasn't received "
+                    "before sending again"
+                ) from e
+        finally:
+            # Once send_message returns the mail is accepted: a failed QUIT changes nothing.
+            try:
+                smtp.quit()
+            except Exception:
+                smtp.close()
 
 
 class LogMailer:
-    """Development mail: logged, never sent."""
+    """Development mail: logged (never the address), never sent."""
+
+    delivers = False
 
     def send(self, email: Email) -> None:
-        logger.info("email not sent (no SMTP_HOST) to %s: %s", email.to, email.subject)
+        logger.info("email not sent (no SMTP_HOST): %s", email.subject)
 
 
 def default_mailer(settings: Settings) -> Mailer:
     if not settings.smtp_host:
+        logger.warning("SMTP_HOST is not set: outcome emails are only logged, never sent")
         return LogMailer()
     if not settings.smtp_from:
         raise RuntimeError("SMTP_FROM must be set when SMTP_HOST is")

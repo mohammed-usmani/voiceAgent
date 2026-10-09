@@ -6,6 +6,7 @@ from tests.fakes import FakeModels
 from tests.seed import seed_decision, seed_finished_call, seed_message
 from voiceagent.db.base import make_sessionmaker
 from voiceagent.db.models import Candidate, Decision, Event, Message, Task
+from voiceagent.outcomes.email import LogMailer
 from voiceagent.worker.main import run_once
 from voiceagent.worker.queue import LEASE
 from voiceagent.worker.send import queue_send
@@ -43,6 +44,15 @@ def test_sends_and_marks_everything_notified(engine, session, mailer):
         "queued",
         "sent",
     ]
+
+
+def test_a_send_without_smtp_says_it_was_not_delivered(engine, session, monkeypatch):
+    monkeypatch.setattr("voiceagent.worker.send.MAILER", LogMailer())
+    decision, message = queued_message(session)
+    run_once(make_sessionmaker(engine), FakeModels())
+    session.expire_all()
+    sent = session.scalars(select(Event).where(Event.type == "sent")).one()
+    assert sent.data == {"decision_id": str(decision.id), "delivered": False}
 
 
 def test_a_failed_send_is_marked_for_a_manual_retry(engine, session, mailer):
