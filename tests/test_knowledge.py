@@ -105,3 +105,17 @@ def test_reindexing_a_job_replaces_its_criteria(session):
         ("override", job.id, None),
         ("criteria", job.id, "python_years"),
     }
+
+
+def test_search_embeds_the_query_as_a_query(session):
+    models = FakeModels()
+    add_knowledge(session, models, "criteria", [(None, "python backend api", {})])
+    session.commit()
+
+    def as_documents(texts):
+        raise AssertionError("the query was embedded as a document")
+
+    models.embed = as_documents
+    assert [h.text for h in search_knowledge(session, models, "criteria", "python")] == [
+        "python backend api"
+    ]

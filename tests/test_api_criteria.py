@@ -170,16 +170,17 @@ def race(engine, job_id, method, path, json=None):
     """Send the same request twice at once, both queued behind a lock on the job row."""
     results = []
 
-    def call():
+    def call(client):
         try:
-            r = getattr(make_client(engine), method)(path, json=json, headers=KEY)
+            r = getattr(client, method)(path, json=json, headers=KEY)
             results.append(r.status_code)
         except Exception as e:  # e.g. an IntegrityError surfacing as a 500
             results.append(type(e).__name__)
 
     with make_sessionmaker(engine)() as lock:
         lock.execute(select(Job).where(Job.id == job_id).with_for_update())
-        threads = [threading.Thread(target=call) for _ in range(2)]
+        clients = [make_client(engine) for _ in range(2)]
+        threads = [threading.Thread(target=call, args=(c,)) for c in clients]
         for t in threads:
             t.start()
         time.sleep(0.5)  # both requests are now waiting on the lock

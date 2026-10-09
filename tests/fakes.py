@@ -40,3 +40,8 @@ class FakeModels:
         if self.embed_error:
             raise self.embed_error
         return [hash_embed(t) for t in texts]
+
+    def embed_query(self, text):
+        if self.embed_error:
+            raise self.embed_error
+        return hash_embed(text)

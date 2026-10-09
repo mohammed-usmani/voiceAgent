@@ -32,7 +32,7 @@ def search_knowledge(
     k: int = 8,
     exclude_job_id: uuid.UUID | None = None,
 ) -> list[Knowledge]:
-    vector = models.embed([query])[0]
+    vector = models.embed_query(query)
     stmt = select(Knowledge).where(Knowledge.kind == kind)
     if exclude_job_id is not None:
         stmt = stmt.where(or_(Knowledge.job_id.is_(None), Knowledge.job_id != exclude_job_id))

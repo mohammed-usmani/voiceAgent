@@ -29,6 +29,9 @@ class FakeEmbedder:
     def embed_documents(self, texts):
         return [[float(len(t))] for t in texts]
 
+    def embed_query(self, text):
+        return [-float(len(text))]
+
 
 def models(main, backup):
     return FallbackModels(main, backup, FakeEmbedder(), name="test")
@@ -65,3 +68,7 @@ def test_default_clients_leave_retries_to_fallback_models_and_time_out():
     (_, main), _, (_, backup) = m._attempts
     assert (main.max_retries, main.timeout) == (0, 60)
     assert (backup.max_retries, backup.request_timeout) == (0, 60)
+
+
+def test_embed_query_uses_the_query_embedding():
+    assert models(FakeChat(), FakeChat()).embed_query("abc") == [-3.0]

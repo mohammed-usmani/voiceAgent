@@ -20,6 +20,8 @@ class Models(Protocol):
 
     def embed(self, texts: list[str]) -> list[list[float]]: ...
 
+    def embed_query(self, text: str) -> list[float]: ...
+
 
 class StructuredOutputError(RuntimeError):
     pass
@@ -50,6 +52,10 @@ class FallbackModels:
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         return self._embedder.embed_documents(texts)
+
+    def embed_query(self, text: str) -> list[float]:
+        """Embeds a search query (Gemini's RETRIEVAL_QUERY task, vs. documents)."""
+        return self._embedder.embed_query(text)
 
 
 def default_models(settings: Settings) -> FallbackModels:
