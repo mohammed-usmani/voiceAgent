@@ -12,6 +12,7 @@ from voiceagent.db.models import CriteriaVersion, Job, Task
 from voiceagent.events import emit
 from voiceagent.knowledge.store import similar_criteria
 from voiceagent.llm import Models
+from voiceagent.worker.queue import heartbeat
 
 
 def generate_criteria(session: Session, models: Models, task: Task) -> None:
@@ -34,6 +35,7 @@ def generate_criteria(session: Session, models: Models, task: Task) -> None:
         description=description,
         notes=notes,
         similar_lookup=similar,
+        heartbeat=lambda: heartbeat(session, task),
     )
 
     # Lock the job, as the API's criteria endpoints do, so versions and status can't race.

@@ -3,12 +3,14 @@ run at once without taking the same task."""
 
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.orm import Session
 
 from voiceagent.db.models import Task
 
-# A task still "running" this long after it started belongs to a worker that died.
+# A task still "running" this long after it started (or last renewed its lease with
+# `heartbeat`) belongs to a worker that died. Handlers renew between steps; one step is
+# at most one structured() call, i.e. 3 x llm.MODEL_TIMEOUT_S, well under the lease.
 LEASE = timedelta(minutes=10)
 BACKOFF_S = 30
 
@@ -52,6 +54,12 @@ def claim(session: Session) -> Task | None:
     task.started_at = now
     session.commit()
     return task
+
+
+def heartbeat(session: Session, task: Task) -> None:
+    """Renew a running task's lease, in its own short transaction."""
+    session.execute(update(Task).where(Task.id == task.id).values(started_at=datetime.now(UTC)))
+    session.commit()
 
 
 def complete(session: Session, task: Task) -> None:

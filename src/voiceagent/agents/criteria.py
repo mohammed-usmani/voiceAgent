@@ -139,7 +139,10 @@ def run_criteria_agent(
     description: str,
     notes: str,
     similar_lookup: Callable[[str], list[str]],
+    heartbeat: Callable[[], None] = lambda: None,
 ) -> CriteriaResult:
+    """`heartbeat` runs before every step, so a worker can keep its task's lease alive."""
+
     def retrieve(state: State) -> State:
         query = f"{state['title']}\n{state['description'][:1500]}"
         return {"similar": similar_lookup(query), "round": 0, "issues": []}
@@ -214,11 +217,16 @@ def run_criteria_agent(
             warnings.append("No checkable requirements found; add them before approving.")
         return {"result": CriteriaResult(criteria, warnings, state["round"])}
 
+    def beating(step: Callable[[State], State]) -> Callable[[State], State]:
+        def run(state: State) -> State:
+            heartbeat()
+            return step(state)
+
+        return run
+
     graph = StateGraph(State)
-    graph.add_node("retrieve", retrieve)
-    graph.add_node("draft", draft)
-    graph.add_node("critique", critique)
-    graph.add_node("finalize", finalize)
+    for step in (retrieve, draft, critique, finalize):
+        graph.add_node(step.__name__, beating(step))
     graph.add_edge(START, "retrieve")
     graph.add_edge("retrieve", "draft")
     graph.add_edge("draft", "critique")

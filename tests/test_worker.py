@@ -228,3 +228,23 @@ def test_worker_loop_survives_database_errors(monkeypatch):
     with pytest.raises(Stop):
         worker_main.main()
     assert len(calls) == 2
+
+
+def test_long_runs_renew_their_lease(engine, session):
+    new_job(session)
+    task_id = session.scalars(select(Task)).one().id
+    session.close()
+    sm = make_sessionmaker(engine)
+    started = []
+
+    def age_then_read_lease(schema):
+        with sm() as s:
+            task = s.get(Task, task_id)
+            if schema is Draft:  # pretend the run has already taken longer than the lease
+                task.started_at = datetime.now(UTC) - LEASE - timedelta(minutes=1)
+                s.commit()
+            else:
+                started.append(task.started_at)
+
+    run_once(sm, Hooked(GOOD_REPLIES, age_then_read_lease))
+    assert started and started[0] > datetime.now(UTC) - timedelta(minutes=1)

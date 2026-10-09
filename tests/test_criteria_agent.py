@@ -141,3 +141,17 @@ def test_no_requirements_left_is_a_warning():
     result = run(models)
     assert result.criteria.requirements == []
     assert any("No checkable requirements" in w for w in result.warnings)
+
+
+def test_heartbeat_runs_before_every_step():
+    beats = []
+    models = FakeModels({Draft: [draft(PYTHON)], Critique: [Critique()]})
+    run_criteria_agent(
+        models,
+        title="Backend Engineer",
+        description=JD,
+        notes="",
+        similar_lookup=lambda q: [],
+        heartbeat=lambda: beats.append(len(models.prompts)),
+    )
+    assert beats == [0, 0, 1, 2]  # retrieve, draft, critique, finalize

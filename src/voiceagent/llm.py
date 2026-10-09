@@ -10,6 +10,7 @@ from voiceagent.settings import EMBEDDING_DIM, Settings
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
+MODEL_TIMEOUT_S = 60
 
 
 class Models(Protocol):
@@ -55,10 +56,22 @@ def default_models(settings: Settings) -> FallbackModels:
     from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
     from langchain_groq import ChatGroq
 
+    # FallbackModels owns the retry policy, so the clients don't retry on their own.
+    # Worst case per structured() call: 3 attempts x MODEL_TIMEOUT_S.
     main = ChatGoogleGenerativeAI(
-        model=settings.main_model, api_key=settings.gemini_api_key, temperature=0
+        model=settings.main_model,
+        api_key=settings.gemini_api_key,
+        temperature=0,
+        max_retries=0,
+        timeout=MODEL_TIMEOUT_S,
     )
-    backup = ChatGroq(model=settings.backup_model, api_key=settings.groq_api_key, temperature=0)
+    backup = ChatGroq(
+        model=settings.backup_model,
+        api_key=settings.groq_api_key,
+        temperature=0,
+        max_retries=0,
+        timeout=MODEL_TIMEOUT_S,
+    )
     embedder = GoogleGenerativeAIEmbeddings(
         model=settings.embedding_model,
         api_key=settings.gemini_api_key,

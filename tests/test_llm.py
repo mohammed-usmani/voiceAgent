@@ -1,7 +1,8 @@
 import pytest
 from pydantic import BaseModel
 
-from voiceagent.llm import FallbackModels, StructuredOutputError
+from voiceagent.llm import FallbackModels, StructuredOutputError, default_models
+from voiceagent.settings import Settings
 
 
 class Out(BaseModel):
@@ -56,3 +57,11 @@ def test_all_failures_raise_with_every_reason():
 
 def test_embed_delegates():
     assert models(FakeChat(), FakeChat()).embed(["ab", "c"]) == [[2.0], [1.0]]
+
+
+def test_default_clients_leave_retries_to_fallback_models_and_time_out():
+    settings = Settings(database_url="", api_key="", gemini_api_key="g", groq_api_key="q")
+    m = default_models(settings)
+    (_, main), _, (_, backup) = m._attempts
+    assert (main.max_retries, main.timeout) == (0, 60)
+    assert (backup.max_retries, backup.request_timeout) == (0, 60)
