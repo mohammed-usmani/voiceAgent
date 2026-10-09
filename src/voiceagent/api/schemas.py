@@ -2,9 +2,10 @@ import uuid
 from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from voiceagent.criteria.schema import JobFacts, Requirement
+from voiceagent.settings import DEFAULT_VOICE
 
 
 def _valid_timezone(v: str | None) -> str | None:
@@ -17,6 +18,22 @@ def _valid_timezone(v: str | None) -> str | None:
     return v
 
 
+HH_MM = r"^([01]\d|2[0-3]):[0-5]\d$"
+
+
+class CallingHours(BaseModel):
+    """Local times (the job's timezone) between which candidates may be called."""
+
+    start: str = Field(pattern=HH_MM, examples=["10:00"])
+    end: str = Field(pattern=HH_MM, examples=["19:00"])
+
+    @model_validator(mode="after")
+    def _start_before_end(self) -> "CallingHours":
+        if self.start >= self.end:  # zero-padded HH:MM compares correctly as text
+            raise ValueError("calling_hours start must be before end")
+        return self
+
+
 class JobCreate(BaseModel):
     title: str = Field(min_length=2, max_length=200)
     company_name: str = Field(min_length=1, max_length=200)
@@ -26,6 +43,10 @@ class JobCreate(BaseModel):
     timezone: str = "Asia/Kolkata"
     auto_send_invites: bool = True
     response_days: int = Field(default=3, ge=1, le=30)
+    voice: str = Field(default=DEFAULT_VOICE, min_length=1, max_length=100)
+    calling_hours: CallingHours = Field(
+        default_factory=lambda: CallingHours(start="10:00", end="19:00")
+    )
 
     _tz = field_validator("timezone")(_valid_timezone)
 
@@ -39,6 +60,8 @@ class JobUpdate(BaseModel):
     timezone: str | None = None
     auto_send_invites: bool | None = None
     response_days: int | None = Field(default=None, ge=1, le=30)
+    voice: str | None = Field(default=None, min_length=1, max_length=100)
+    calling_hours: CallingHours | None = None
 
     _tz = field_validator("timezone")(_valid_timezone)
 
@@ -54,6 +77,9 @@ class JobOut(BaseModel):
     timezone: str
     auto_send_invites: bool
     response_days: int
+    voice: str
+    calling_hours: CallingHours
+    criteria_stale: bool
     status: str
     created_at: datetime
 

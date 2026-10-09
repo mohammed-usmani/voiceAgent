@@ -19,7 +19,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from voiceagent.db.base import Base
-from voiceagent.settings import EMBEDDING_DIM
+from voiceagent.settings import DEFAULT_VOICE, EMBEDDING_DIM
 
 
 class Timestamps:
@@ -46,6 +46,11 @@ class Job(Timestamps, Base):
     )
     auto_send_invites: Mapped[bool] = mapped_column(Boolean, default=True)
     response_days: Mapped[int] = mapped_column(Integer, default=3)
+    voice: Mapped[str] = mapped_column(
+        String(100), default=DEFAULT_VOICE, server_default=DEFAULT_VOICE
+    )
+    # True when the description or notes changed after criteria were generated.
+    criteria_stale: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     status: Mapped[str] = mapped_column(String(30), default="generating")
 
 

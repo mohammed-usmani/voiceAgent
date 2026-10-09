@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -5,7 +7,8 @@ from sqlalchemy import select
 from tests.fakes import FakeModels
 from voiceagent.api.app import create_app
 from voiceagent.db.base import make_sessionmaker
-from voiceagent.db.models import Task
+from voiceagent.db.models import CriteriaVersion, Event, Task
+from voiceagent.settings import DEFAULT_VOICE
 
 KEY = {"X-API-Key": "test-key"}
 JOB = {
@@ -85,3 +88,79 @@ def test_app_refuses_to_start_without_a_key(engine):
 
 def test_non_ascii_key_is_rejected_not_a_server_error(client):
     assert client.get("/jobs", headers={"X-API-Key": "clé".encode()}).status_code == 401
+
+
+def test_new_job_defaults_voice_hours_and_fresh_criteria(client):
+    job = client.post("/jobs", json=JOB, headers=KEY).json()
+    assert job["voice"] == DEFAULT_VOICE
+    assert job["calling_hours"] == {"start": "10:00", "end": "19:00"}
+    assert job["criteria_stale"] is False
+
+
+def test_voice_and_calling_hours_are_settable(client):
+    body = JOB | {"voice": "voice-123", "calling_hours": {"start": "09:30", "end": "18:00"}}
+    job = client.post("/jobs", json=body, headers=KEY).json()
+    assert (job["voice"], job["calling_hours"]) == ("voice-123", {"start": "09:30", "end": "18:00"})
+    r = client.patch(
+        f"/jobs/{job['id']}",
+        json={"calling_hours": {"start": "11:00", "end": "17:00"}},
+        headers=KEY,
+    )
+    assert r.json()["calling_hours"] == {"start": "11:00", "end": "17:00"}
+    assert r.json()["voice"] == "voice-123"
+
+
+@pytest.mark.parametrize(
+    "hours",
+    [
+        {"start": "19:00", "end": "10:00"},
+        {"start": "10:00", "end": "10:00"},
+        {"start": "9:00", "end": "17:00"},
+        {"start": "24:00", "end": "25:00"},
+        {"start": "10:00"},
+    ],
+)
+def test_calling_hours_are_validated(client, hours):
+    assert client.post("/jobs", json=JOB | {"calling_hours": hours}, headers=KEY).status_code == 422
+    job = client.post("/jobs", json=JOB, headers=KEY).json()
+    r = client.patch(f"/jobs/{job['id']}", json={"calling_hours": hours}, headers=KEY)
+    assert r.status_code == 422
+
+
+def job_with_criteria(client, session) -> str:
+    job = client.post("/jobs", json=JOB, headers=KEY).json()
+    session.add(
+        CriteriaVersion(
+            job_id=uuid.UUID(job["id"]), version=1, requirements=[], job_facts={"summary": "APIs"}
+        )
+    )
+    session.commit()
+    return job["id"]
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"description": JOB["description"] + " Now fully on-site."},
+        {"recruiter_notes": "Must also know Kafka."},
+    ],
+)
+def test_editing_the_text_marks_criteria_stale(client, session, patch):
+    job_id = job_with_criteria(client, session)
+    r = client.patch(f"/jobs/{job_id}", json=patch, headers=KEY)
+    assert r.json()["criteria_stale"] is True
+    assert "criteria_stale" in [e.type for e in session.scalars(select(Event))]
+
+
+@pytest.mark.parametrize("patch", [{"agent_name": "Meera"}, {"description": JOB["description"]}])
+def test_edits_that_keep_the_text_leave_criteria_fresh(client, session, patch):
+    job_id = job_with_criteria(client, session)
+    assert (
+        client.patch(f"/jobs/{job_id}", json=patch, headers=KEY).json()["criteria_stale"] is False
+    )
+
+
+def test_editing_before_any_criteria_exist_is_not_stale(client):
+    job = client.post("/jobs", json=JOB, headers=KEY).json()
+    r = client.patch(f"/jobs/{job['id']}", json={"recruiter_notes": "Kafka too."}, headers=KEY)
+    assert r.json()["criteria_stale"] is False

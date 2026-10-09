@@ -248,3 +248,29 @@ def test_long_runs_renew_their_lease(engine, session):
 
     run_once(sm, Hooked(GOOD_REPLIES, age_then_read_lease))
     assert started and started[0] > datetime.now(UTC) - timedelta(minutes=1)
+
+
+def test_new_draft_clears_stale_criteria(engine, session):
+    job = new_job(session)
+    job.criteria_stale = True
+    session.commit()
+    run_once(make_sessionmaker(engine), GOOD)
+    session.expire_all()
+    assert session.get(Job, job.id).criteria_stale is False
+
+
+def test_description_edited_during_generation_leaves_criteria_stale(engine, session):
+    # The draft was written from the old text, so it is stale the moment it lands.
+    job = new_job(session)
+    edited = []
+
+    def edit_midway(schema):
+        if not edited:
+            with make_sessionmaker(engine)() as s:
+                s.get(Job, job.id).description = JD + " Now fully on-site."
+                s.commit()
+            edited.append(True)
+
+    run_once(make_sessionmaker(engine), Hooked(GOOD_REPLIES, edit_midway))
+    session.expire_all()
+    assert session.get(Job, job.id).criteria_stale is True

@@ -66,6 +66,8 @@ def generate_criteria(session: Session, models: Models, task: Task) -> None:
     )
     if job.status in ("generating", "criteria_failed"):  # never demote a job approved meanwhile
         job.status = "criteria_ready"
+    # The draft reflects the text read at the start; an edit since then leaves it stale.
+    job.criteria_stale = (job.description, job.recruiter_notes) != (description, notes)
     emit(session, "job", job.id, "criteria_ready", {"version": version, "rounds": result.rounds})
 
 

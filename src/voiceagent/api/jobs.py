@@ -57,12 +57,25 @@ def read_job(job_id: uuid.UUID, session: DB) -> Job:
     return get_job(session, job_id)
 
 
+# Criteria are generated from these; changing them makes existing criteria out of date.
+CRITERIA_SOURCES = ("description", "recruiter_notes")
+
+
 @router.patch("/jobs/{job_id}", response_model=JobOut)
 def update_job(job_id: uuid.UUID, body: JobUpdate, session: DB) -> Job:
-    job = get_job(session, job_id)
+    job = get_job(session, job_id, lock=True)  # the worker compares this text under the lock
     changes = body.model_dump(exclude_unset=True, exclude_none=True)
+    changed_sources = sorted(
+        f for f in CRITERIA_SOURCES if f in changes and changes[f] != getattr(job, f)
+    )
     for field, value in changes.items():
         setattr(job, field, value)
+    has_criteria = session.scalar(
+        select(CriteriaVersion.id).where(CriteriaVersion.job_id == job.id).limit(1)
+    )
+    if changed_sources and has_criteria is not None and not job.criteria_stale:
+        job.criteria_stale = True
+        emit(session, "job", job.id, "criteria_stale", {"fields": changed_sources})
     emit(session, "job", job.id, "updated", {"fields": sorted(changes)})
     session.commit()
     return job
