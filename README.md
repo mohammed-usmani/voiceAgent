@@ -133,6 +133,29 @@ Linphone server didn't answer over UDP.
 | [`backchannel.py`](src/voiceagent/backchannel.py) | Which utterances are backchannels ("yeah", "uh-huh") |
 | [`outbound.py`](src/voiceagent/outbound.py) | `voiceagent-call`: have the agent call a SIP address |
 
+## Screening backend (in progress)
+
+The agent is being turned into a backend for AI phone screening: a recruiter pastes a job
+description, and a criteria agent (LangGraph) drafts what the call should check, grounds
+every requirement in the description's own words, has a critic check it for legality and
+phone-checkability, and revises until it passes. Approved criteria are indexed in pgvector
+and ground future jobs.
+
+```bash
+docker compose up -d postgres
+uv run alembic upgrade head
+uv run screening-api      # REST API on :8000, needs SCREENING_API_KEY
+uv run screening-worker   # runs the agents
+```
+
+| Endpoint | What |
+|---|---|
+| `POST /jobs` | create a job from a description; criteria generate in the background |
+| `GET /jobs/{id}/criteria` | the generated criteria, with warnings and validation errors |
+| `PATCH /jobs/{id}/criteria` | edit (an approved version becomes a new draft) |
+| `POST /jobs/{id}/criteria:regenerate` · `:approve` | regenerate, or approve for calling |
+| `GET /events?after=` | event feed |
+
 ## Built with
 
 The [LiveKit Agents](https://github.com/livekit/agents) SDK, with Deepgram, Gemini, Groq

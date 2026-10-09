@@ -42,6 +42,7 @@ dev = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+markers = ["live: calls real model APIs (run with RUN_LIVE=1)"]
 
 [tool.ruff]
 line-length = 100
