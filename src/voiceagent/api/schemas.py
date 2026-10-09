@@ -300,3 +300,20 @@ class Override(BaseModel):
         description="the weighted requirements this override is about; only their answers "
         "become calibration examples. Omitted: every scored one. Empty: none",
     )
+
+
+class CampaignStart(BaseModel):
+    max_concurrent: int | None = Field(
+        default=None, ge=1, le=10, description="calls in progress at once; default 2"
+    )
+
+
+class CampaignOut(BaseModel):
+    job_id: uuid.UUID
+    status: str  # active · paused · done
+    max_concurrent: int
+    started_at: datetime
+    paused_at: datetime | None
+    finished_at: datetime | None
+    in_flight: int = Field(description="this job's calls queued, ringing or in progress")
+    candidates: dict[str, int] = Field(description="how many of the job's candidates per status")
