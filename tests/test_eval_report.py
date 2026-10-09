@@ -1,7 +1,14 @@
 import json
 from datetime import UTC, datetime
 
-from voiceagent.evals.report import compare, previous_run, render_markdown, run_name, write_run
+from voiceagent.evals.report import (
+    compare,
+    new_run_dir,
+    previous_run,
+    render_markdown,
+    run_name,
+    write_run,
+)
 
 
 def results(name="20261009T120000Z", summary=None, **kw):
@@ -67,6 +74,12 @@ def test_run_names_sort_by_time():
     assert run_name(datetime(2026, 10, 9, 7, 5, 3, tzinfo=UTC)) == "20261009T070503Z"
 
 
+def test_runs_started_in_the_same_second_get_their_own_directories(tmp_path):
+    at = datetime(2026, 10, 9, 7, 5, 3, tzinfo=UTC)
+    names = [new_run_dir(tmp_path / "runs", at).name for _ in range(3)]
+    assert names == ["20261009T070503Z", "20261009T070503Z-2", "20261009T070503Z-3"]
+
+
 def test_the_previous_run_is_the_latest_readable_one_before_this(tmp_path):
     save(tmp_path, "20261001T000000Z", json.dumps(results(summary={"a": 1})))
     save(tmp_path, "20261002T000000Z", json.dumps(results(summary={"a": 2})))
@@ -110,6 +123,7 @@ def test_the_report_has_every_section(tmp_path):
         "previous": "20261008T000000Z",
         "rows": compare(r["summary"], {"summary": {"decision.accuracy": 0.5}}),
     }
+    (tmp_path / r["name"]).mkdir()
     write_run(tmp_path / r["name"], r)
     md = (tmp_path / r["name"] / "report.md").read_text()
     assert json.loads((tmp_path / r["name"] / "results.json").read_text())["name"] == r["name"]

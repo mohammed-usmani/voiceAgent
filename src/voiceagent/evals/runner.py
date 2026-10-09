@@ -23,7 +23,7 @@ from voiceagent.evals.metrics import criteria_metrics, fairness_metrics, summari
 from voiceagent.evals.offline import OfflineAgentLLM, OfflineModels, OfflineSimulator
 from voiceagent.evals.personas import FAIRNESS_NAMES, Persona, make_persona, persona_keys, renamed
 from voiceagent.evals.personas import NAMES as PERSONA_NAMES
-from voiceagent.evals.report import RUNS_DIR, compare, previous_run, run_name, write_run
+from voiceagent.evals.report import RUNS_DIR, compare, new_run_dir, previous_run, write_run
 from voiceagent.evals.simulate import Simulator, simulate_call
 from voiceagent.llm import Models
 from voiceagent.worker.assess import MESSAGE_KIND, NOT_ASSESSED, answered_consent
@@ -288,7 +288,6 @@ def _failed_persona(job: RefJob, key: str, name: str, error: str) -> dict:
 async def run_eval(cfg: EvalConfig, backend: Backend, meter: Meter) -> dict:
     """Run, write evals/runs/<name>/ and return the results."""
     started = datetime.now(UTC)
-    name = run_name(started)
     jobs = load_jobs(cfg.jobs, cfg.jobs_dir)
     criteria_rows: list[dict] = []
     records: list[dict] = []
@@ -334,6 +333,8 @@ async def run_eval(cfg: EvalConfig, backend: Backend, meter: Meter) -> dict:
         "budget_usd": cfg.budget_usd,
         "offline": cfg.offline,
     }
+    run_dir = new_run_dir(cfg.out, started)
+    name = run_dir.name
     prev = previous_run(cfg.out, name, config) if cfg.compare else None
     results = {
         "name": name,
@@ -351,5 +352,5 @@ async def run_eval(cfg: EvalConfig, backend: Backend, meter: Meter) -> dict:
         },
         "cost": {"usd": meter.usd, "tokens": meter.tokens()},
     }
-    write_run(cfg.out / name, results)
+    write_run(run_dir, results)
     return results

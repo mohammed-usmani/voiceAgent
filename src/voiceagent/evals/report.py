@@ -15,6 +15,19 @@ def run_name(at: datetime) -> str:
     return at.strftime("%Y%m%dT%H%M%SZ")
 
 
+def new_run_dir(out: Path, at: datetime) -> Path:
+    """A new, empty directory for a run; one started in the same second gets a suffix."""
+    out.mkdir(parents=True, exist_ok=True)
+    name, n = run_name(at), 1
+    while True:
+        d = out / (name if n == 1 else f"{name}-{n}")
+        try:
+            d.mkdir()
+            return d
+        except FileExistsError:
+            n += 1
+
+
 def previous_run(out: Path, current: str, config: dict | None = None) -> dict | None:
     """The latest run before `current` whose results.json can be read and, given `config`,
     that ran with the same SAME settings."""
@@ -189,7 +202,6 @@ def render_markdown(results: dict) -> str:
 
 
 def write_run(directory: Path, results: dict) -> None:
-    directory.mkdir(parents=True, exist_ok=True)
     (directory / "results.json").write_text(
         json.dumps(results, indent=1, ensure_ascii=False, default=str)
     )
