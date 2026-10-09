@@ -105,3 +105,11 @@ def test_a_quote_spanning_two_answers_is_not_the_candidates_words():
     ]
     assert verify_answer("Ten years, give or take.", call)
     assert not verify_answer("work here. Ten years, give or take.", call)
+
+
+def test_numbers_inside_hyphenated_words_and_a_unit_count():
+    from voiceagent.agents.tools import numbers_in
+
+    assert numbers_in("I have a 60-day notice period") == [60]
+    assert numbers_in("about a year in telesales, and an eight-month stint") == [1, 8]
+    assert numbers_in("a lot of a things") == []

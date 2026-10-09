@@ -20,8 +20,14 @@ def _words(s: str) -> list[str]:
     return [NUMBER_WORDS.get(w, w) for w in words if w]
 
 
+_ONE = re.compile(r"\ban? (year|month|week|day|lakh)\b")
+
+
 def numbers_in(text: str) -> list[float]:
-    """The numbers in `text`, spelled out or not ("five years, 18 months" → [5, 18])."""
+    """The numbers in `text`, spelled out or not ("five years, 18 months" → [5, 18]), also
+    inside hyphenated words ("a 60-day notice" → [60]) and as "a" or "an" before a unit
+    ("about a year" → [1])."""
+    text = _ONE.sub(r"1 \1", text.lower().replace("-", " "))
     return [float(w) for w in _words(text) if _NUMBER.fullmatch(w)]
 
 
