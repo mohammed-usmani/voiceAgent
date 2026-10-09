@@ -166,6 +166,17 @@ def test_a_live_call_is_left_alone(session):
     assert session.get(Call, live.id).status == "in_progress"
 
 
+def test_a_queued_call_still_waiting_for_its_dial_is_not_closed(session):
+    # A worker backlog: the call hasn't rung, so it must not burn an attempt.
+    call = a_call(session, status="queued")
+    session.add(Task(kind="dial", payload={"call_id": str(call.id)}))
+    session.commit()
+    age(session, call, MAX_CALL_MINUTES + 1)
+    assert close_stale_calls(session) == 0
+    session.expire_all()
+    assert session.get(Call, call.id).status == "queued"
+
+
 def for_update_targets(engine, run) -> list[str]:
     """The tables each SELECT ... FOR UPDATE locks while `run` runs, in order."""
     seen = []

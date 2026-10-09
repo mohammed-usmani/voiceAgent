@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 
-from sqlalchemy import func, select
+from sqlalchemy import String, cast, exists, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from voiceagent.criteria.schema import Criteria
@@ -20,6 +20,7 @@ from voiceagent.db.models import (
     Candidate,
     CriteriaVersion,
     Job,
+    Task,
 )
 from voiceagent.events import emit
 from voiceagent.settings import get_settings
@@ -60,9 +61,19 @@ def lock_call(session: Session, call_id: uuid.UUID) -> Call | None:
 
 def close_stale_calls(session: Session, candidate_id: uuid.UUID | None = None) -> int:
     """Fail active calls nobody has written to for MAX_CALL_MINUTES (all of them, or one
-    candidate's), so the candidate can be called again. Returns how many. Not committed."""
+    candidate's), so the candidate can be called again. Returns how many. Not committed.
+
+    A call whose dial task is still waiting (a backlog, or no worker running) is left to
+    that task: it hasn't rung yet, so failing it would burn an attempt for nothing."""
     cutoff = datetime.now(UTC) - timedelta(minutes=MAX_CALL_MINUTES)
-    stale = select(Call.id).where(Call.status.in_(ACTIVE_CALL_STATUSES), Call.updated_at < cutoff)
+    dial_pending = exists().where(
+        Task.kind == "dial",
+        Task.status.in_(("queued", "running")),
+        Task.payload["call_id"].astext == cast(Call.id, String),
+    )
+    stale = select(Call.id).where(
+        Call.status.in_(ACTIVE_CALL_STATUSES), Call.updated_at < cutoff, ~dial_pending
+    )
     if candidate_id is not None:
         stale = stale.where(Call.candidate_id == candidate_id)
     closed = 0
