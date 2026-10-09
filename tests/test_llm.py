@@ -1,3 +1,5 @@
+import gc
+
 import pytest
 from pydantic import BaseModel
 
@@ -110,6 +112,10 @@ def test_local_embedder_makes_768_dim_query_and_document_vectors():
     assert [len(v) for v in docs] == [768, 768] and len(query) == 768
     similarity = [sum(a * b for a, b in zip(query, d, strict=True)) for d in docs]
     assert similarity[0] > similarity[1]
+    # Free the onnxruntime session now: left to interpreter exit, its thread pool tears down
+    # racily and aborts the process ("libc++abi: ... mutex lock failed", exit 134).
+    del e
+    gc.collect()
 
 
 def test_reviewer_runs_on_its_own_model_with_the_same_backup():
