@@ -155,14 +155,16 @@ def capture_metrics(jobs: dict[str, RefJob], records: list[dict]) -> dict:
 
 def decision_metrics(records: list[dict]) -> dict:
     ok = [r for r in records if r.get("error") is None]
-    decided = [
-        r for r in ok if r["persona"]["expected_decision"] and r.get("assessment") is not None
+    # a call cut short before its decision (no assessment) counts as a wrong decision
+    decided = [r for r in ok if r["persona"]["expected_decision"]]
+    pairs = [
+        (r["persona"]["expected_decision"], (r.get("assessment") or {}).get("result"))
+        for r in decided
     ]
-    pairs = [(r["persona"]["expected_decision"], r["assessment"]["result"]) for r in decided]
-    not_rejectable = [got for want, got in pairs if want != "not_suitable"]
-    groups: dict[tuple, list[str]] = defaultdict(list)
-    for r in decided:
-        groups[(r["job"], r["persona"]["key"])].append(r["assessment"]["result"])
+    not_rejectable = [got for want, got in pairs if want != "not_suitable" and got is not None]
+    groups: dict[tuple, list[str | None]] = defaultdict(list)
+    for r, (_, got) in zip(decided, pairs, strict=True):
+        groups[(r["job"], r["persona"]["key"])].append(got)
     # with --runs > 1: personas whose repeated calls all got the same decision
     repeated = [len(set(v)) == 1 for v in groups.values() if len(v) > 1]
     return {

@@ -135,6 +135,16 @@ def test_false_rejections_are_counted_apart_from_accuracy():
     assert m["consistency"] is None  # one run per persona
 
 
+def test_a_call_cut_short_before_its_decision_counts_as_wrong():
+    recs = [
+        record("suitable", "suitable"),
+        record("suitable", None, key="evasive", end="callback_requested"),
+    ]
+    m = decision_metrics(recs)
+    assert m["n"] == 2 and m["accuracy"] == 0.5
+    assert m["false_rejection_rate"] == 0.0  # over decided calls only
+
+
 def test_consistency_across_repeated_runs():
     recs = [
         record(run=0),
