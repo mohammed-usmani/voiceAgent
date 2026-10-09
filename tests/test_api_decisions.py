@@ -3,11 +3,20 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from tests.fakes import FakeModels
-from tests.seed import seed_decision, seed_finished_call, seed_message
+from tests.seed import seed_call, seed_decision, seed_finished_call, seed_message
 from voiceagent.agents.messages import InviteCheck, Letter, RejectionCheck
 from voiceagent.api.app import create_app
 from voiceagent.db.base import make_sessionmaker
-from voiceagent.db.models import Answer, Candidate, Decision, Event, Knowledge, Message, Task
+from voiceagent.db.models import (
+    Answer,
+    Candidate,
+    CriteriaVersion,
+    Decision,
+    Event,
+    Knowledge,
+    Message,
+    Task,
+)
 from voiceagent.worker.main import run_once
 
 KEY = {"X-API-Key": "test-key"}
@@ -246,3 +255,57 @@ def test_messages_can_be_edited_until_queued(client, session):
     assert client.patch(f"/messages/{m.id}", json={"body": "x"}, headers=KEY).status_code == 409
     assert client.patch(f"/messages/{m.id}", json={"subject": ""}, headers=KEY).status_code == 422
     assert ("message", "edited") in [(e.entity, e.type) for e in session.scalars(select(Event))]
+
+
+def test_an_edited_subject_cannot_carry_a_line_break(client, session):
+    decided(session)
+    m = session.scalars(select(Message)).one()
+    body = {"subject": "Your application\r\nBcc: someone@example.com"}
+    assert client.patch(f"/messages/{m.id}", json=body, headers=KEY).status_code == 422
+
+
+def test_an_older_decision_is_not_sent_after_the_candidate_was_notified(client, session):
+    d = decided(session)
+    session.get(Candidate, d.candidate_id).status = "notified"
+    session.commit()
+    r = client.post(f"/decisions/{d.id}:approve", headers=KEY)
+    assert r.status_code == 409 and "force" in r.json()["detail"]
+    r = client.post(f"/decisions/{d.id}:approve", json={"force": True}, headers=KEY)
+    assert r.status_code == 200
+
+
+def test_a_decision_superseded_by_a_re_call_is_not_sent(client, session):
+    old = decided(session)
+    candidate = session.get(Candidate, old.candidate_id)
+    cv = session.get(CriteriaVersion, old.criteria_version_id)
+    seed_decision(session, seed_call(session, candidate, cv, status="completed"))
+    r = client.post(f"/decisions/{old.id}:approve", headers=KEY)
+    assert r.status_code == 409 and "newer decision" in r.json()["detail"]
+
+
+def test_a_failed_send_can_still_be_overridden(client, engine, session, mailer):
+    d = decided(session)
+    mailer.error = ConnectionRefusedError("smtp down")
+    client.post(f"/decisions/{d.id}:approve", headers=KEY)
+    drain(engine, FakeModels())
+    r = client.post(
+        f"/decisions/{d.id}:override", json={"result": "suitable", "note": "x"}, headers=KEY
+    )
+    assert r.status_code == 200 and r.json()["status"] == "overridden"
+    assert r.json()["message"] is None  # the failed rejection is gone; an invite is drafted
+
+
+def test_an_override_calibrates_only_the_answers_it_names(client, session):
+    d = decided(session)
+    body = {"result": "suitable", "note": "x", "requirement_ids": []}
+    assert client.post(f"/decisions/{d.id}:override", json=body, headers=KEY).status_code == 200
+    assert session.scalars(select(Knowledge)).all() == []
+    body["requirement_ids"] = ["python_years"]  # a must-have is never calibrated
+    r = client.post(f"/decisions/{d.id}:override", json=body, headers=KEY)
+    assert r.status_code == 422 and "python_years" in r.json()["detail"]
+    body["requirement_ids"] = ["expected_salary"]
+    assert client.post(f"/decisions/{d.id}:override", json=body, headers=KEY).status_code == 200
+    session.expire_all()
+    assert [k.data["requirement_id"] for k in session.scalars(select(Knowledge))] == [
+        "expected_salary"
+    ]

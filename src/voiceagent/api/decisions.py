@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from voiceagent.api.deps import get_models, get_session
 from voiceagent.api.schemas import (
     AnswerOut,
+    ApproveRequest,
     DecisionOut,
     DecisionSummary,
     MessageEdit,
@@ -115,13 +116,33 @@ def read_decision(decision_id: uuid.UUID, session: DB) -> DecisionOut:
 
 
 @router.post("/decisions/{decision_id}:approve", response_model=DecisionOut)
-def approve_decision(decision_id: uuid.UUID, session: DB) -> DecisionOut:
+def approve_decision(
+    decision_id: uuid.UUID, session: DB, body: ApproveRequest | None = None
+) -> DecisionOut:
     """Send the drafted message for the decision's result (the recruiter's, if overridden).
-    Also retries a message whose sending failed."""
+    Also retries a message whose sending failed. A candidate who was already notified, or
+    has a newer decision (a re-call), is only emailed again with `{"force": true}`: two
+    different outcomes would contradict each other."""
+    candidate = session.get(Candidate, get_decision(session, decision_id).candidate_id)
+    session.refresh(candidate, with_for_update=True)  # the lock order: candidate, decision
     decision = get_decision(session, decision_id, lock=True)
     result = decision.final_result or decision.result
     if decision.status == "sent":
         raise HTTPException(status_code=409, detail="the message was already sent")
+    if not (body and body.force):
+        newer = session.scalar(
+            select(Decision.id).where(
+                Decision.candidate_id == candidate.id,
+                Decision.id != decision.id,
+                Decision.created_at > decision.created_at,
+            )
+        )
+        if candidate.status == "notified" or newer is not None:
+            why = "was already notified" if newer is None else "has a newer decision"
+            raise HTTPException(
+                status_code=409,
+                detail=f'the candidate {why}; send {{"force": true}} to email them anyway',
+            )
     if result not in MESSAGE_KIND:
         raise HTTPException(
             status_code=409, detail=f"the result is {result}: choose one with :override"
@@ -144,18 +165,27 @@ def override_decision(
     session: DB,
     models: Annotated[Models, Depends(get_models)],
 ) -> DecisionOut:
-    """Replace the agent's result with the recruiter's. The message is re-drafted for the
-    new result (send it with :approve), and the override becomes a calibration example."""
+    """Replace the agent's result with the recruiter's, while it is in review or its send
+    failed. The message is re-drafted for the new result (send it with :approve), and the
+    override becomes a calibration example (only for `requirement_ids`, if given)."""
     decision = get_decision(session, decision_id, lock=True)
-    if decision.status not in REVIEWABLE:
+    message = _message(session, decision, lock=True)
+    failed_send = decision.status == "approved" and message and message.status == "failed"
+    if decision.status not in REVIEWABLE and not failed_send:
         raise HTTPException(status_code=409, detail=f"the decision is already {decision.status}")
     candidate = session.get(Candidate, decision.candidate_id)
     job = session.get(Job, candidate.job_id)
     cv = session.get(CriteriaVersion, decision.criteria_version_id)
+    requirements = [Requirement.model_validate(r) for r in cv.requirements]
+    weighted = {r.id for r in requirements if not r.hard}
+    if body.requirement_ids is not None and (bad := set(body.requirement_ids) - weighted):
+        raise HTTPException(
+            status_code=422,
+            detail=f"not weighted requirements of these criteria: {', '.join(sorted(bad))}",
+        )
     decision.final_result = body.result
     decision.reviewer_note = body.note
     decision.status = "overridden"
-    message = _message(session, decision, lock=True)
     if message is not None and message.kind != MESSAGE_KIND[body.result]:
         session.delete(message)  # never send the old result's message by mistake
         message = None
@@ -167,9 +197,10 @@ def override_decision(
             models,
             job=job,
             decision=decision,
-            requirements=[Requirement.model_validate(r) for r in cv.requirements],
+            requirements=requirements,
             final_result=body.result,
             note=body.note,
+            requirement_ids=body.requirement_ids,
         )
     except Exception as e:
         session.rollback()

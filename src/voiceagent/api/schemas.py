@@ -246,6 +246,20 @@ class MessageEdit(BaseModel):
     subject: str | None = Field(default=None, min_length=1, max_length=300)
     body: str | None = Field(default=None, min_length=1, max_length=20000)
 
+    @field_validator("subject")
+    @classmethod
+    def _one_line(cls, v: str | None) -> str | None:
+        if v is not None and re.search(r"[\r\n]", v):
+            raise ValueError("the subject must be a single line")
+        return v
+
+
+class ApproveRequest(BaseModel):
+    force: bool = Field(
+        default=False,
+        description="send although the candidate was already notified or has a newer decision",
+    )
+
 
 class DecisionSummary(BaseModel):
     id: uuid.UUID
@@ -275,4 +289,14 @@ class DecisionOut(DecisionSummary):
 
 class Override(BaseModel):
     result: Literal["suitable", "not_suitable"] = Field(description="the recruiter's call")
-    note: str = Field(min_length=1, max_length=2000, description="why; kept for calibration")
+    note: str = Field(
+        min_length=1,
+        max_length=2000,
+        description="why. Shared as a calibration example when scoring other candidates: "
+        "never include the candidate's name or anything personal about them",
+    )
+    requirement_ids: list[str] | None = Field(
+        default=None,
+        description="the weighted requirements this override is about; only their answers "
+        "become calibration examples. Omitted: every scored one. Empty: none",
+    )

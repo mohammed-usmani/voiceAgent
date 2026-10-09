@@ -113,13 +113,19 @@ def index_override(
     requirements: list[Requirement],
     final_result: str,
     note: str,
+    requirement_ids: list[str] | None = None,
 ) -> None:
     """Index a recruiter's override as calibration examples: one per soft requirement the
-    agent scored on a quote. Hard requirements are never calibrated (rules decide them),
-    and the candidate's name is never stored, so examples can't carry it into scoring.
+    agent scored on a quote, or only those in `requirement_ids` (the ones the override is
+    about). Hard requirements are never calibrated (rules decide them), and the
+    candidate's name is never stored, so examples can't carry it into scoring.
     Replaces the decision's earlier examples."""
     delete_overrides(session, decision_id=decision.id)
-    soft = {r.id: r for r in requirements if not r.hard}
+    soft = {
+        r.id: r
+        for r in requirements
+        if not r.hard and (requirement_ids is None or r.id in requirement_ids)
+    }
     entries = []
     for reason in decision.reasons:
         r = soft.get(reason["requirement_id"])
