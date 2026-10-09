@@ -1,12 +1,15 @@
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from tests.fakes import FakeModels
 from tests.seed import seed_call, seed_candidate, seed_job
 from voiceagent.api.app import create_app
+from voiceagent.call.store import MAX_CALL_MINUTES
 from voiceagent.db.base import make_sessionmaker
-from voiceagent.db.models import Candidate, Event, Task
+from voiceagent.db.models import Call, Candidate, Event, Task
 
 KEY = {"X-API-Key": "test-key"}
 
@@ -81,3 +84,20 @@ def test_read_calls(client, session):
     missing = "00000000-0000-0000-0000-000000000000"
     assert client.get(f"/calls/{missing}", headers=KEY).status_code == 404
     assert client.post(f"/candidates/{missing}/call", headers=KEY).status_code == 404
+
+
+def test_a_stale_active_call_does_not_block_a_new_one(client, session):
+    # I1: an agent that never reported back must not lock the candidate out forever.
+    job, cv = seed_job(session)
+    candidate = seed_candidate(session, job, status="calling")
+    stale = seed_call(session, candidate, cv, status="in_progress")
+    session.execute(
+        update(Call)
+        .where(Call.id == stale.id)
+        .values(updated_at=datetime.now(UTC) - timedelta(minutes=MAX_CALL_MINUTES + 1))
+    )
+    session.commit()
+    r = client.post(f"/candidates/{candidate.id}/call", headers=KEY)
+    assert r.status_code == 202 and r.json()["attempt"] == 2
+    session.expire_all()
+    assert session.get(Call, stale.id).status == "failed"

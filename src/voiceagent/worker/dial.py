@@ -16,7 +16,7 @@ from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from voiceagent import outbound
-from voiceagent.call.store import stop_call
+from voiceagent.call.store import lock_call, stop_call
 from voiceagent.db.models import ACTIVE_CALL_STATUSES, Call, Candidate, Job, Task
 from voiceagent.events import emit
 from voiceagent.llm import Models
@@ -46,7 +46,7 @@ def dial_outcome(error: Exception) -> str:
 
 
 def dial(session: Session, models: Models, task: Task) -> None:
-    call = session.get(Call, uuid.UUID(task.payload["call_id"]), with_for_update=True)
+    call = lock_call(session, uuid.UUID(task.payload["call_id"]))
     if call is None:  # the candidate was deleted while the call was queued
         return
     if call.status != "queued":
@@ -68,7 +68,7 @@ def dial(session: Session, models: Models, task: Task) -> None:
         DIALER(address, call.room, f"{job.company_name} Hiring", metadata)
     except Exception as e:
         logger.warning("call %s not answered: %s", call.id, e)
-        call = session.get(Call, call.id, with_for_update=True, populate_existing=True)
+        call = lock_call(session, call.id)
         if call is not None and call.status in ACTIVE_CALL_STATUSES:
             stop_call(session, call, dial_outcome(e), str(e))
         return
@@ -84,6 +84,6 @@ def dial(session: Session, models: Models, task: Task) -> None:
 
 
 def dial_failed(session: Session, payload: dict, error: str) -> None:
-    call = session.get(Call, uuid.UUID(payload["call_id"]), with_for_update=True)
+    call = lock_call(session, uuid.UUID(payload["call_id"]))
     if call is not None and call.status in ("queued", "ringing"):
         stop_call(session, call, "failed", error)

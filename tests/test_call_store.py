@@ -1,13 +1,21 @@
+import re
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import event, select, update
 
 from tests.fakes import FakeModels
 from tests.seed import seed_call, seed_candidate, seed_job
-from voiceagent.call.store import CallOutcome, fail_call, finish_call, load_call
+from voiceagent.call.store import (
+    MAX_CALL_MINUTES,
+    CallOutcome,
+    close_stale_calls,
+    fail_call,
+    finish_call,
+    load_call,
+)
 from voiceagent.db.base import make_sessionmaker
 from voiceagent.db.models import Call, Candidate, Event, Task
 from voiceagent.worker.main import run_once
@@ -135,3 +143,68 @@ def test_postcall_task_is_handled(engine, session):
     session.expire_all()
     assert session.scalars(select(Task)).one().status == "done"
     assert "awaiting_assessment" in [e.type for e in session.scalars(select(Event))]
+
+
+def age(session, call, minutes):
+    """Pretend nothing has touched the call for `minutes`."""
+    session.execute(
+        update(Call)
+        .where(Call.id == call.id)
+        .values(updated_at=datetime.now(UTC) - timedelta(minutes=minutes))
+    )
+    session.commit()
+
+
+@pytest.mark.parametrize("status", ["queued", "ringing", "in_progress"])
+def test_a_call_nobody_reported_back_is_closed_as_failed(session, status):
+    # I1: the agent died (or never came) and the call would stay active forever.
+    stale = a_call(session, status=status)
+    age(session, stale, MAX_CALL_MINUTES + 1)
+    assert close_stale_calls(session) == 1
+    session.commit()
+    session.expire_all()
+    c = session.get(Call, stale.id)
+    assert (c.status, c.end_reason) == ("failed", "error")
+    assert "never reported" in c.error
+    assert session.get(Candidate, c.candidate_id).status == "pending"
+
+
+def test_a_live_call_is_left_alone(session):
+    live = a_call(session)
+    age(session, live, MAX_CALL_MINUTES - 1)
+    assert close_stale_calls(session) == 0
+    session.expire_all()
+    assert session.get(Call, live.id).status == "in_progress"
+
+
+def for_update_targets(engine, run) -> list[str]:
+    """The tables each SELECT ... FOR UPDATE locks while `run` runs, in order."""
+    seen = []
+
+    def record(conn, cursor, statement, *args):
+        if "FOR UPDATE" in statement:
+            seen.append(re.search(r"FROM (\w+)", statement).group(1))
+
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        run()
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+    return seen
+
+
+@pytest.mark.parametrize(
+    "write",
+    [
+        lambda sm, call_id: finish_call(sm, call_id, CallOutcome("completed"), TURNS),
+        lambda sm, call_id: fail_call(sm, call_id, "boom"),
+        lambda sm, call_id: load_call(sm, call_id),
+    ],
+    ids=["finish_call", "fail_call", "load_call"],
+)
+def test_call_writes_lock_the_candidate_before_the_call(engine, session, write):
+    # M9: DELETE /candidates/{id} locks the candidate, then its calls (cascade). Taking
+    # the call first here would deadlock against it.
+    call = a_call(session, status="ringing")
+    sm = make_sessionmaker(engine)
+    assert for_update_targets(engine, lambda: write(sm, call.id))[:2] == ["candidates", "calls"]

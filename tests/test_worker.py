@@ -224,10 +224,37 @@ def test_worker_loop_survives_database_errors(monkeypatch):
     monkeypatch.setattr(worker_main, "make_sessionmaker", lambda engine: None)
     monkeypatch.setattr(worker_main, "default_models", lambda settings: None)
     monkeypatch.setattr(worker_main, "run_once", flaky_run_once)
+    monkeypatch.setattr(worker_main, "sweep_calls", lambda sessionmaker: None)
     monkeypatch.setattr(worker_main.time, "sleep", lambda s: None)
     with pytest.raises(Stop):
         worker_main.main()
     assert len(calls) == 2
+
+
+def test_worker_loop_sweeps_stale_calls_once_a_minute(monkeypatch):
+    # I1: a call the agent never reported back is closed by the worker, on a cadence.
+    class Stop(BaseException):
+        pass
+
+    clock = iter([0.0, 0.0, 30.0, 61.0, 61.0, 90.0])
+    sweeps, runs = [], []
+
+    def run_once(sessionmaker, models):
+        runs.append(1)
+        if len(runs) == 4:
+            raise Stop
+        return True
+
+    monkeypatch.setattr(worker_main, "get_settings", lambda: SimpleNamespace(database_url=""))
+    monkeypatch.setattr(worker_main, "make_engine", lambda url: None)
+    monkeypatch.setattr(worker_main, "make_sessionmaker", lambda engine: "sm")
+    monkeypatch.setattr(worker_main, "default_models", lambda settings: None)
+    monkeypatch.setattr(worker_main, "run_once", run_once)
+    monkeypatch.setattr(worker_main, "sweep_calls", sweeps.append)
+    monkeypatch.setattr(worker_main.time, "monotonic", lambda: next(clock))
+    with pytest.raises(Stop):
+        worker_main.main()
+    assert sweeps == ["sm", "sm"]  # at t=0 and t=61, not at t=30 or t=90
 
 
 def test_long_runs_renew_their_lease(engine, session):

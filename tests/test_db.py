@@ -61,3 +61,14 @@ def test_call_defaults_and_cascade_on_candidate_delete(session):
     session.delete(candidate)
     session.commit()
     assert session.scalars(select(Call)).all() == []
+
+
+def test_connections_give_up_quickly_when_postgres_is_unreachable(monkeypatch):
+    # I1/I2: the agent loads its call while the candidate waits on the line; an unreachable
+    # host must fail in seconds, not after the OS's TCP timeout.
+    from voiceagent.db import base
+
+    seen = {}
+    monkeypatch.setattr(base, "create_engine", lambda url, **kw: seen.update(kw))
+    base.make_engine("postgresql+psycopg://x@10.255.255.1/db")
+    assert seen["connect_args"] == {"connect_timeout": 5}

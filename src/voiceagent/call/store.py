@@ -3,9 +3,10 @@ process (the conversation)."""
 
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from voiceagent.criteria.schema import Criteria
@@ -22,6 +23,45 @@ class CallOutcome:
 
     reason: str
     callback_at: datetime | None = None
+
+
+# A call nobody has written to for this long has lost its agent (never dispatched, killed,
+# or its final save failed): no screening call runs this long. Well above the dial task's
+# lease (worker.queue.LEASE), so a dial that is merely slow is never swept.
+# ponytail: a call that really runs past this loses its transcript (finish_call skips a
+# failed call); add an agent heartbeat if long calls become real.
+MAX_CALL_MINUTES = 30
+STALE_ERROR = "the agent never reported the end of the call"
+
+
+def lock_call(session: Session, call_id: uuid.UUID) -> Call | None:
+    """Lock a call for writing, with its candidate.
+
+    Lock order, everywhere: the candidate, then its call. DELETE /candidates/{id} locks
+    the candidate and then (ON DELETE CASCADE) its calls; taking the call first can
+    deadlock against it.
+    """
+    candidate_id = session.scalar(select(Call.candidate_id).where(Call.id == call_id))
+    if candidate_id is None:
+        return None
+    session.get(Candidate, candidate_id, with_for_update=True, populate_existing=True)
+    return session.get(Call, call_id, with_for_update=True, populate_existing=True)
+
+
+def close_stale_calls(session: Session, candidate_id: uuid.UUID | None = None) -> int:
+    """Fail active calls nobody has written to for MAX_CALL_MINUTES (all of them, or one
+    candidate's), so the candidate can be called again. Returns how many. Not committed."""
+    cutoff = datetime.now(UTC) - timedelta(minutes=MAX_CALL_MINUTES)
+    stale = select(Call.id).where(Call.status.in_(ACTIVE_CALL_STATUSES), Call.updated_at < cutoff)
+    if candidate_id is not None:
+        stale = stale.where(Call.candidate_id == candidate_id)
+    closed = 0
+    for call_id in session.scalars(stale).all():
+        call = lock_call(session, call_id)
+        if call is not None and call.status in ACTIVE_CALL_STATUSES and call.updated_at < cutoff:
+            stop_call(session, call, "failed", STALE_ERROR)
+            closed += 1
+    return closed
 
 
 def stop_call(session: Session, call: Call, status: str, error: str) -> None:
@@ -60,7 +100,7 @@ def default_sessionmaker() -> sessionmaker:
 def load_call(sm: sessionmaker, call_id: uuid.UUID) -> LoadedCall:
     """Everything the agent needs for the call; marks it in progress."""
     with sm() as session:
-        call = session.get(Call, call_id, with_for_update=True)
+        call = lock_call(session, call_id)
         if call is None:
             raise LookupError(f"call {call_id} not found")
         if call.status not in ACTIVE_CALL_STATUSES:
@@ -87,7 +127,7 @@ def finish_call(
     """
     reason = outcome.reason if outcome else "candidate_hung_up"
     with sm() as session:
-        call = session.get(Call, call_id, with_for_update=True)
+        call = lock_call(session, call_id)
         if call is None or call.status not in ACTIVE_CALL_STATUSES:
             return  # the candidate was deleted, or this call was already saved
         call.status = "completed"
@@ -105,7 +145,7 @@ def finish_call(
 def fail_call(sm: sessionmaker, call_id: uuid.UUID, error: str) -> None:
     """The agent couldn't run the call (e.g. it couldn't load it)."""
     with sm() as session:
-        call = session.get(Call, call_id, with_for_update=True)
+        call = lock_call(session, call_id)
         if call is not None and call.status in ACTIVE_CALL_STATUSES:
             stop_call(session, call, "failed", error)
             session.commit()

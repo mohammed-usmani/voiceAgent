@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from voiceagent.api.deps import get_session
 from voiceagent.api.jobs import get_job
 from voiceagent.api.schemas import CallOut, CandidateCreate, CandidateOut, ImportResult, RowError
+from voiceagent.call.store import close_stale_calls
 from voiceagent.db.models import ACTIVE_CALL_STATUSES, Call, Candidate, CriteriaVersion, Job
 from voiceagent.events import emit
 from voiceagent.worker.queue import enqueue
@@ -171,6 +172,7 @@ def call_candidate(candidate_id: uuid.UUID, session: DB) -> Call:
         raise HTTPException(
             status_code=409, detail=f"job is {job.status}: approve its criteria before calling"
         )
+    close_stale_calls(session, candidate.id)  # an agent that never reported back
     active = session.scalar(
         select(Call.id).where(
             Call.candidate_id == candidate.id, Call.status.in_(ACTIVE_CALL_STATUSES)

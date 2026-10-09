@@ -5,6 +5,7 @@ import time
 
 from sqlalchemy.orm import sessionmaker as SessionMaker
 
+from voiceagent.call.store import close_stale_calls
 from voiceagent.db.base import make_engine, make_sessionmaker
 from voiceagent.llm import Models, default_models
 from voiceagent.settings import get_settings
@@ -14,6 +15,7 @@ from voiceagent.worker.queue import claim, complete, fail
 logger = logging.getLogger("voiceagent.worker")
 IDLE_SLEEP_S = 1.0
 ERROR_SLEEP_S = 5.0
+SWEEP_EVERY_S = 60.0
 
 
 def run_once(sessionmaker: SessionMaker, models: Models) -> bool:
@@ -46,14 +48,26 @@ def run_once(sessionmaker: SessionMaker, models: Models) -> bool:
         return True
 
 
+def sweep_calls(sessionmaker: SessionMaker) -> None:
+    """Close calls whose agent never reported back (see close_stale_calls)."""
+    with sessionmaker() as session:
+        if closed := close_stale_calls(session):
+            logger.warning("closed %s call(s) the agent never reported back", closed)
+        session.commit()
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     settings = get_settings()
     sessionmaker = make_sessionmaker(make_engine(settings.database_url))
     models = default_models(settings)
     logger.info("worker started")
+    next_sweep = 0.0
     while True:
         try:
+            if time.monotonic() >= next_sweep:
+                next_sweep = time.monotonic() + SWEEP_EVERY_S
+                sweep_calls(sessionmaker)
             busy = run_once(sessionmaker, models)
         except Exception:  # e.g. Postgres restarting; the task's lease brings it back
             logger.exception("worker loop failed; retrying in %ss", ERROR_SLEEP_S)
