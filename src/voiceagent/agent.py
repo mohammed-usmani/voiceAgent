@@ -130,7 +130,8 @@ def room_options() -> room_io.RoomOptions:
 
 # Answering-machine detection. Detection starts once the agent has joined, after pickup,
 # so a person's first "Hello?" may already be over: silence this long means "unsure",
-# which greets, rather than LiveKit's 10 s default. TIMEOUT caps the wait for a verdict.
+# which greets, rather than LiveKit's 10 s default. TIMEOUT caps the wait for a verdict
+# (wait_until_finished=False: even while the line is still talking).
 AMD_NO_SPEECH_S = 3.0
 AMD_TIMEOUT_S = 8.0
 
@@ -147,8 +148,13 @@ async def answered_by_machine(session: AgentSession) -> bool:
             ivr_detection=False,  # never navigate a phone menu: hang up on it
             suppress_compatibility_warning=True,
             detection_options={"no_speech_threshold": AMD_NO_SPEECH_S, "timeout": AMD_TIMEOUT_S},
+            wait_until_finished=False,
         ) as detector:
             result = await detector.execute()
+            if not result.is_machine:
+                # execute() lets the agent speak again: drop a reply to a "Hello?" heard
+                # while listening before it plays, so nothing comes before the disclosure.
+                await session.interrupt(force=True)
     except Exception:
         logger.exception("answering-machine detection failed; greeting as if a person answered")
         return False

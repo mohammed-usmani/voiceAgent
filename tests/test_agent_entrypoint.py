@@ -237,6 +237,7 @@ class FakeAMD:
 
     def __init__(self, session, **kwargs):
         FakeAMD.kwargs = kwargs
+        self.session = session
 
     async def __aenter__(self):
         if self.error is not None:
@@ -244,12 +245,20 @@ class FakeAMD:
         return self
 
     async def __aexit__(self, *exc):
-        return None
+        self.session.log.append("amd closed")
 
     async def execute(self):
         return AMDPredictionEvent(
             speech_duration=1.0, category=self.category, reason="test", transcript="", delay=0.0
         )
+
+
+class AMDSession:
+    def __init__(self) -> None:
+        self.log = []
+
+    async def interrupt(self, *, force=False):
+        self.log.append("interrupt" if force else "interrupt (not forced)")
 
 
 @pytest.mark.parametrize(
@@ -265,12 +274,17 @@ class FakeAMD:
 async def test_answering_machine_verdicts(monkeypatch, category, machine):
     monkeypatch.setattr(FakeAMD, "category", category)
     monkeypatch.setattr(agent_module, "AMD", FakeAMD)
-    assert await agent_module.answered_by_machine(object()) is machine
+    session = AMDSession()
+    assert await agent_module.answered_by_machine(session) is machine
     assert FakeAMD.kwargs["ivr_detection"] is False
     assert (FakeAMD.kwargs["llm"], FakeAMD.kwargs["stt"]) == (None, None)
+    assert FakeAMD.kwargs["wait_until_finished"] is False  # the timeout is a hard cap
+    # For a person, a reply to a "Hello?" held back while listening is dropped before
+    # detection lets the agent speak; a machine was already interrupted by AMD itself.
+    assert session.log == (["amd closed"] if machine else ["interrupt", "amd closed"])
 
 
 async def test_a_failing_detector_greets_as_if_a_person_answered(monkeypatch):
     monkeypatch.setattr(FakeAMD, "error", ValueError("AMD classifier could not be resolved"))
     monkeypatch.setattr(agent_module, "AMD", FakeAMD)
-    assert await agent_module.answered_by_machine(object()) is False
+    assert await agent_module.answered_by_machine(AMDSession()) is False

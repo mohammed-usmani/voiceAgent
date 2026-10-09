@@ -63,7 +63,8 @@ class ScreeningAgent(ReliableAgent):
         self._hang_up = hang_up
         self._clock = clock
         # Listens to the line before the greeting: True when a machine answered (agent.py
-        # runs LiveKit's answering-machine detection). None: always greet (text mode).
+        # runs LiveKit's answering-machine detection, and drops any reply to a "Hello?"
+        # heard meanwhile). None: always greet (text mode).
         self._detect_machine = detect_machine
 
     async def on_enter(self) -> None:
@@ -75,9 +76,6 @@ class ScreeningAgent(ReliableAgent):
                 if self._hang_up is not None:
                     self._hang_up()
                 return
-            # A reply to a "Hello?" heard while listening must not come before the
-            # disclosure.
-            await self.session.interrupt(force=True)
         # Fixed text, so no LLM: the AI and recording disclosure is said word for word on
         # every call, and the first words come without model latency. Uninterruptible: a
         # "Hello?" over it must not cut the disclosure short, since the prompt tells the
