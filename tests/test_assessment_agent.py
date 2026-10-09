@@ -380,14 +380,19 @@ def test_the_candidates_words_are_fenced_as_data_in_every_prompt():
     assert "<resume>" in models.prompts[0][2]
 
 
+def ok(rid="python_years"):
+    return ReasonCheck(
+        requirement_id=rid, finding="checks out", matches_resume=True, supported=True
+    )
+
+
 def test_only_an_unsupported_check_makes_the_reviewer_disagree():
     # It once flagged disagreement and then wrote "the verdict is correct"; now each reason
     # gets its own finding and yes/no, and only a "no" sends the candidate to a recruiter.
-    ok = ReasonCheck(requirement_id="python_years", finding="2 vs >= 3: correct", supported=True)
-    disagreeing = Review(checks=[ok, flagged("'two' or 'five'?"), flagged("hedged", "salary")])
+    disagreeing = Review(checks=[ok(), flagged("'two' or 'five'?"), ok("expected_salary")])
     for review, result, notes in [
-        (Review(checks=[ok]), "not_suitable", ""),
-        (disagreeing, "needs_review", "python_years: 'two' or 'five'?; salary: hedged"),
+        (Review(checks=[ok()]), "not_suitable", ""),
+        (disagreeing, "needs_review", "python_years: 'two' or 'five'?"),
     ]:
         models = FakeModels(
             {
@@ -400,7 +405,55 @@ def test_only_an_unsupported_check_makes_the_reviewer_disagree():
         assert (a.result, a.agent_review["notes"]) == (result, notes)
 
 
+def test_a_rejection_is_only_overturned_on_the_must_have_it_failed():
+    quibble = Review(checks=[ok(), flagged("no range given", "expected_salary")])
+    models = FakeModels(
+        {
+            EvidenceSet: [evidence(python=2.0, py_quote=TWO_QUOTE)],
+            SoftScores: [scores(0.9)],
+            Review: [quibble],
+        }
+    )
+    a = assess(models, transcript=TWO_CALL)
+    assert (a.result, a.agent_review["agree"]) == ("not_suitable", True)
+
+
+def test_an_answer_the_resume_contradicts_goes_to_a_recruiter():
+    claims_more = ReasonCheck(
+        requirement_id="python_years",
+        finding="says 5 years; the résumé shows 1",
+        matches_resume=False,
+        supported=True,
+    )
+    models = FakeModels(
+        {
+            EvidenceSet: [evidence()],
+            SoftScores: [scores(0.8)],
+            Review: [Review(checks=[claims_more, ok("expected_salary")])],
+        }
+    )
+    a = assess(models, auto_send=True)
+    assert a.result == "needs_review"
+    assert a.agent_review["notes"] == "python_years: says 5 years; the résumé shows 1"
+
+
+def test_the_reviewer_sees_the_job_descriptions_words():
+    models = FakeModels(
+        {EvidenceSet: [evidence()], SoftScores: [scores(0.8)], Review: [Review(checks=[])]}
+    )
+    assess(models, auto_send=True)
+    review_prompt = models.prompts[-1][2]
+    assert '"source"' in review_prompt
+
+
 def test_the_reviewer_checks_answers_against_the_resume():
     from voiceagent.agents.assessment import REVIEWER
 
     assert "contradict the résumé" in REVIEWER
+
+
+def test_no_experience_supports_a_zero():
+    from voiceagent.agents.assessment import _number_in_quote
+
+    assert _number_in_quote(0, "No, I don't have any formal sales experience yet.")
+    assert not _number_in_quote(0, "I have some sales experience.")

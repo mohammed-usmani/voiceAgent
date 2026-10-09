@@ -116,4 +116,6 @@ def flagged(finding: str, requirement_id: str = "python_years"):
     """A reviewer check that doesn't support its reason's verdict."""
     from voiceagent.agents.assessment import ReasonCheck
 
-    return ReasonCheck(requirement_id=requirement_id, finding=finding, supported=False)
+    return ReasonCheck(
+        requirement_id=requirement_id, finding=finding, matches_resume=True, supported=False
+    )

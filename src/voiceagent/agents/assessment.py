@@ -16,6 +16,7 @@ never accept or reject anyone.
 import json
 import logging
 import operator
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Annotated, TypedDict
@@ -73,6 +74,9 @@ class SoftScores(BaseModel):
 class ReasonCheck(BaseModel):
     requirement_id: str
     finding: str = Field(description="what the transcript and résumé show for this reason")
+    matches_resume: bool = Field(
+        description="false only if the résumé states something different from the answer"
+    )
     supported: bool = Field(description="the evidence clearly supports this reason's verdict")
 
 
@@ -173,7 +177,12 @@ def _requirement_json(r: Requirement) -> dict:
 def _number_in_quote(value: float, quote: str) -> bool:
     # ponytail: only months → years is converted; other unit changes ("a year and a half")
     # leave the answer unconfirmed, and a recruiter reads it.
+    if value == 0 and _NONE.search(quote):  # "No, I don't have any sales experience yet."
+        return True
     return any(abs(n - value) < 1e-6 or abs(n / 12 - value) < 1e-6 for n in numbers_in(quote))
+
+
+_NONE = re.compile(r"\b(no|not|never|none|zero|don't|haven't|didn't)\b", re.IGNORECASE)
 
 
 def _checked(r: Requirement, e: Evidence | None, transcript: list[dict]) -> Evidence:
@@ -416,13 +425,21 @@ def run_assessment(
             + "\n\nReasons:\n"
             + json.dumps(state["reasons"], indent=1, ensure_ascii=False)
             + "\n\nRequirements:\n"
-            + json.dumps(
-                [r.model_dump(mode="json", exclude={"source"}) for r in requirements], indent=1
-            )
+            # with `source`, the job description's own words: without it the reviewer
+            # called an in-range salary unsupported, not knowing the range
+            + json.dumps([r.model_dump(mode="json") for r in requirements], indent=1)
             + f"\n\nTranscript:\n{convo}\n\n{resume_block}"
         )
         out = reviewer.structured(Review, REVIEWER, user)
-        problems = [f"{c.requirement_id}: {c.finding}" for c in out.checks if not c.supported]
+        # A rejection stands on its failed must-haves; a quibble about a weighted score
+        # can't overturn it.
+        failed = {k for k, v in state["hard"].items() if v == "fail"}
+        problems = [
+            f"{c.requirement_id}: {c.finding}"
+            for c in out.checks
+            if (not c.supported or not c.matches_resume)
+            and (state["result"] != "not_suitable" or c.requirement_id in failed)
+        ]
         agent_review = {
             "agree": not problems,
             "notes": "; ".join(problems),
