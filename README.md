@@ -135,6 +135,10 @@ Linphone server didn't answer over UDP.
 | [`backchannel.py`](src/voiceagent/backchannel.py) | Which utterances are backchannels ("yeah", "uh-huh") |
 | [`outbound.py`](src/voiceagent/outbound.py) | `voiceagent-call`: have the agent call a SIP address |
 | [`call/`](src/voiceagent/call) | Screening calls: prompt from criteria, `end_call`, saving the result, text-mode harness |
+| [`agents/assessment.py`](src/voiceagent/agents/assessment.py) | After the call: evidence, rules, soft scores, reviewer → decision |
+| [`agents/messages.py`](src/voiceagent/agents/messages.py) | Invite / rejection writer with a checker |
+| [`rules.py`](src/voiceagent/rules.py) | Deterministic hard-requirement rules and decision thresholds |
+| [`outcomes/email.py`](src/voiceagent/outcomes/email.py) | SMTP mailer (development: log only) |
 
 ## Screening backend (in progress)
 
@@ -150,6 +154,14 @@ order, answers only from the job's facts, closes neutrally, and ends the call wi
 tool, `end_call`. The transcript and end reason are saved on the call. A call that arrives
 without a screening call id (someone phoning in, `voiceagent console`) is still the
 Nimbus Labs demo.
+
+After the call an assessment agent (LangGraph) extracts each answer from the transcript and
+checks that its quote is the candidate's own words, applies the hard requirements' rules in
+code, scores the rest against their rubrics (calibrated by past recruiter overrides), and
+has a second, stronger model challenge every rejection and every verdict resting on a weak
+answer. A message agent drafts the invite or a reason-free rejection, checked before it is
+kept. Invites to suitable candidates go out automatically (per job); every rejection and
+`needs_review` waits for a recruiter to approve or override.
 
 ```bash
 docker compose up -d postgres
@@ -169,12 +181,19 @@ uv run voiceagent dev        # the call agent; reads screening calls from DATABA
 | `GET /jobs/{id}/candidates` · `GET / DELETE /candidates/{id}` | list, read, delete (deletes their calls and transcripts) |
 | `POST /candidates/{id}/call` | ring the candidate now (job active, criteria approved) |
 | `GET /calls/{id}` · `GET /candidates/{id}/calls` | status, end reason, transcript |
+| `GET /decisions?job_id=&status=` · `GET /decisions/{id}` | the review queue; a decision with its answers, reasons, reviewer notes and drafted message |
+| `POST /decisions/{id}:approve` | send the drafted message (also retries a failed send) |
+| `POST /decisions/{id}:override` | `{"result", "note"}`: the recruiter's call; re-drafts the message and calibrates future scoring |
+| `GET / PATCH /messages/{id}` | read, or edit the subject/body before sending |
 | `GET /events?after=` | event feed |
 
 Phone numbers need an outbound trunk in `SIP_OUTBOUND_TRUNK_ID`; SIP addresses don't.
 
+Email goes out through `SMTP_HOST` (see `.env.example`); without it, messages are only
+recorded in the database and the log.
+
 The backend's agents run on DeepSeek-V4-Flash (backup MiniMax-M3) via Together AI's
-JSON-schema mode; embeddings come from `BAAI/bge-base-en-v1.5`, run locally.
+JSON-schema mode, and the assessment's reviewer on DeepSeek-V4-Pro; embeddings come from `BAAI/bge-base-en-v1.5`, run locally.
 
 ## Model choice
 
