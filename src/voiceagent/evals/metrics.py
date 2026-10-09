@@ -2,7 +2,7 @@
 functions over plain dicts (the shapes in results.json), so they are easy to test and a
 past run's results can be re-read.
 
-A call record: {"job", "persona" (Persona dump), "run", "call" {"end_reason",
+A call record: {"job", "persona" (Persona dump), "run", "call" {"end_reason", "stopped_by",
 "callback_at", "turns", "transcript"}, "assessment" {"result", "score", "answers",
 "agent_review", ...} or None, "judgement" (CallJudgement dump) or None, "message"
 {..., "judgement"} or None, "calibrated" {"result", "score"} or None, "cost_usd",

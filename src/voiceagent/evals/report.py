@@ -55,6 +55,13 @@ def _fmt(v) -> str:
     return str(v)
 
 
+def _ended(call: dict | None) -> str:
+    """How the call ended, and why the harness stopped it if it did."""
+    if not call:
+        return "—"
+    return " / ".join(filter(None, [call["end_reason"], call.get("stopped_by")]))
+
+
 def _table(header: list[str], rows: list[list]) -> list[str]:
     lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
     lines += ["| " + " | ".join(_fmt(c) for c in row) + " |" for row in rows]
@@ -131,7 +138,7 @@ def render_markdown(results: dict) -> str:
             [
                 c["job"],
                 c["persona"]["key"],
-                f"{(c.get('call') or {}).get('end_reason', '—')} ({c['persona']['expected_end']})",
+                f"{_ended(c.get('call'))} ({c['persona']['expected_end']})",
                 f"{(c.get('assessment') or {}).get('result', '—')} "
                 f"({c['persona']['expected_decision'] or 'none'})",
                 (c.get("assessment") or {}).get("score"),

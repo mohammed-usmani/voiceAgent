@@ -23,7 +23,7 @@ END = "[END]"
 
 class Simulator(Protocol):
     def reply(self, persona: Persona, job: RefJob, said: list[dict]) -> str | None:
-        """What the candidate says next, or None to hang up."""
+        """What the candidate says next, "" if they said nothing, or None to hang up."""
 
 
 @dataclass
@@ -32,6 +32,8 @@ class SimCall:
     callback_at: str | None
     transcript: list[dict]  # as the agent stores it on the call
     candidate_turns: int
+    # why the harness ended a call the agent didn't: turn_limit, simulator_end, simulator_empty
+    stopped_by: str | None = None
 
 
 CANDIDATE = """You are playing a job candidate on a phone screening call, to test a recruiter's
@@ -76,7 +78,7 @@ class LLMSimulator:
             ("human" if t["role"] == "agent" else "ai", t["text"]) for t in said
         ]
         text = str(self._chat.invoke(messages).content).strip().strip('"')
-        return None if not text or END in text else text
+        return None if END in text else text
 
 
 def eval_job_row(job: RefJob) -> Job:
@@ -115,7 +117,7 @@ async def simulate_call(
         backup=backup_llm,
         clock=lambda: now,
     )
-    turns = 0
+    turns, stopped_by = 0, None
     async with AgentSession(llm=agent_llm) as session:
         await (await session.start(agent, capture_run=True))
         while agent.outcome is None and turns < max_turns:
@@ -123,10 +125,13 @@ async def simulate_call(
                 meter.check()
             said = transcript(session.history)
             line = await asyncio.to_thread(simulator.reply, persona, job, said)
-            if line is None:
+            if not line:
+                stopped_by = "simulator_empty" if line == "" else "simulator_end"
                 break
             turns += 1
             await session.run(user_input=line)
+        if agent.outcome is None and stopped_by is None:
+            stopped_by = "turn_limit"
         said = transcript(session.history)
     outcome = agent.outcome
     return SimCall(
@@ -134,4 +139,5 @@ async def simulate_call(
         callback_at=outcome.callback_at.isoformat() if outcome and outcome.callback_at else None,
         transcript=said,
         candidate_turns=turns,
+        stopped_by=stopped_by,
     )

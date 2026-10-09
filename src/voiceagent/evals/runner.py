@@ -184,6 +184,7 @@ async def eval_persona(
             "end_reason": sim.end_reason,
             "callback_at": sim.callback_at,
             "turns": sim.candidate_turns,
+            "stopped_by": sim.stopped_by,
             "transcript": sim.transcript,
         }
         models = backend.models_for(job, persona)

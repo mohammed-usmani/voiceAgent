@@ -51,6 +51,7 @@ async def test_the_real_agent_talks_to_the_simulated_candidate_until_end_call():
         candidate,
     )
     assert result.end_reason == "completed" and result.candidate_turns == 2
+    assert result.stopped_by is None
     greet = greeting(eval_job_row(JOB), SimpleNamespace(name="Ananya Rao"))
     assert [t["role"] for t in result.transcript] == ["agent", "candidate"] * 2 + ["agent"]
     assert result.transcript[0]["text"] == greet
@@ -61,12 +62,15 @@ async def test_a_call_that_never_ends_is_cut_off_at_the_turn_cap():
     candidate = Lines(*["Hmm."] * 50)
     result = await call(["Go on."] * 50, candidate, max_turns=3)
     assert result.candidate_turns == 3
-    assert result.end_reason == "candidate_hung_up"
+    assert (result.end_reason, result.stopped_by) == ("candidate_hung_up", "turn_limit")
 
 
 async def test_the_candidate_can_hang_up():
     result = await call(["Hello?"], Lines())
     assert (result.end_reason, result.candidate_turns) == ("candidate_hung_up", 0)
+    assert result.stopped_by == "simulator_end"
+    silent = await call(["Hello?"], Lines(""))
+    assert (silent.end_reason, silent.stopped_by) == ("candidate_hung_up", "simulator_empty")
 
 
 async def test_a_callback_keeps_its_time():
@@ -109,4 +113,4 @@ def test_the_simulator_plays_the_persona_from_its_side_of_the_call():
 
 def test_the_simulator_hangs_up_on_the_end_marker():
     assert LLMSimulator(FakeChat(f"Bye! {END}")).reply(PERSONA, JOB, []) is None
-    assert LLMSimulator(FakeChat("  ")).reply(PERSONA, JOB, []) is None
+    assert LLMSimulator(FakeChat("  ")).reply(PERSONA, JOB, []) == ""

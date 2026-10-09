@@ -115,6 +115,8 @@ def test_the_report_has_every_section(tmp_path):
     )
     assert "- software-engineer / bad_time: TimeoutError" in md
     assert "| Qwen/Qwen3.5-9B | 1000 | 200 |" in md
+    r["calls"][0]["call"] |= {"end_reason": "candidate_hung_up", "stopped_by": "turn_limit"}
+    assert "| clear_fit | candidate_hung_up / turn_limit (completed) |" in render_markdown(r)
     assert "Stopped early" not in md
 
 
