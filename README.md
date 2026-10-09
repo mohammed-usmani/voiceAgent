@@ -139,6 +139,7 @@ Linphone server didn't answer over UDP.
 | [`agents/messages.py`](src/voiceagent/agents/messages.py) | Invite / rejection writer with a checker |
 | [`rules.py`](src/voiceagent/rules.py) | Deterministic hard-requirement rules and decision thresholds |
 | [`outcomes/email.py`](src/voiceagent/outcomes/email.py) | SMTP mailer (development: log only) |
+| [`evals/`](src/voiceagent/evals) | `screening-eval`: reference jobs, simulated candidates, metrics, run report |
 
 ## Screening backend (in progress)
 
@@ -197,6 +198,41 @@ recorded in the database and the log.
 
 The backend's agents run on DeepSeek-V4-Flash (backup MiniMax-M3) via Together AI's
 JSON-schema mode, and the assessment's reviewer on DeepSeek-V4-Pro; embeddings come from `BAAI/bge-base-en-v1.5`, run locally.
+
+## Evaluation
+
+`screening-eval` measures every stage offline, on six reference jobs in `evals/jobs/`
+(software engineer, sales executive, warehouse supervisor, staff nurse, customer support,
+data analyst), each with hand-labelled criteria:
+
+- **Criteria generation** — the criteria agent on each job description, matched against
+  the labels by an LLM judge: recall, precision, hard-flag accuracy, rule correctness
+  ("1-3 years" must become `>= 1`), illegal lines dropped, critic rounds, requirements
+  removed as ungrounded.
+- **Calls** — simulated candidates talk to the real agent in text mode (LiveKit
+  `AgentSession.run()`): a clear fit, one candidate per must-have they miss, a borderline
+  one, and candidates who decline the salary question, ramble, ask questions, ask for a
+  callback, refuse the recording, or overstate their résumé. The real assessment and
+  message agents then run on each transcript. Measured: answer capture, decision accuracy,
+  false-rejection rate (reported on its own: it hurts candidates most), `needs_review`
+  rate, a conversation checklist judge, a message judge, the reviewer's catches and
+  needless escalations, accuracy before and after recruiter overrides, cost and turns per
+  call.
+- **Fairness** — one persona replayed under four names (men's and women's names from
+  different communities) must get the same decision, with scores within 0.05.
+
+Expected decisions come from the rule engine on each persona's ground truth, which is set
+in code from the labelled rules, so the suite never grades the system against itself.
+
+```bash
+uv run screening-eval                        # all jobs, 4 personas each, stops at $2
+uv run screening-eval --jobs staff-nurse --personas 9 --runs 3
+uv run screening-eval --offline              # fakes only: a free smoke test
+```
+
+Each run writes `evals/runs/<UTC timestamp>/results.json` and `report.md`, with a
+comparison against the previous run. Text mode doesn't see transcription errors or
+interruptions; spoken runs over SIP come later.
 
 ## Model choice
 
