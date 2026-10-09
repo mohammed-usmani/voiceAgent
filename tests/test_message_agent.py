@@ -56,6 +56,7 @@ def test_a_clean_invite_passes_in_one_round():
     writer_prompt = models.prompts[0]
     assert "The Acme hiring team" in writer_prompt[1]
     assert "Priya" in writer_prompt[2] and "Sharma" not in writer_prompt[2]
+    assert "<candidate_name>\nPriya\n</candidate_name>" in writer_prompt[2]  # data, fenced
     assert "Two technical rounds and a chat with the founder" in writer_prompt[2]
 
 
