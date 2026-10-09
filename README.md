@@ -194,6 +194,20 @@ tool, `end_call`. The transcript and end reason are saved on the call. A call th
 without a screening call id (someone phoning in, `voiceagent console`) is still the
 Nimbus Labs demo.
 
+A campaign calls a job's candidates in the background. Once a minute the worker queues the
+calls that are due, inside the job's calling hours in its timezone (daylight saving
+included), at most `max_concurrent` (default 2) of the job's calls at once, manual calls
+included. A call nobody takes (no answer, busy, voicemail, or a dial that failed) is retried
+2 hours later, three calls in all; after the third the candidate is `unreachable`. A
+candidate who asked to be called back is called at the time they gave, even outside calling
+hours, but never before 09:00 or after 21:00 local. Before greeting, the agent runs
+LiveKit's answering-machine detection: on voicemail or a phone menu it says nothing and
+hangs up. The campaign is `done` once nobody can be called again; starting it again picks
+up candidates added since. Every decision is in the event feed (`campaign_started`,
+`campaign_paused`, `campaign_done`, each call's `queued` with `reason` first_call, retry
+or callback, `voicemail`, `unreachable`). A ringing phone holds one worker, so run several
+`screening-worker`s to ring in parallel.
+
 After the call an assessment agent (LangGraph) extracts each answer from the transcript and
 checks that its quote is the candidate's own words, applies the hard requirements' rules in
 code, scores the rest against their rubrics (calibrated by past recruiter overrides), and
@@ -222,6 +236,8 @@ uv run voiceagent dev        # the call agent; reads screening calls from DATABA
 | `POST /jobs/{id}/candidates` · `:import` | add a candidate, or upload a CSV (`Content-Type: text/csv`; columns name, email, phone or sip_address, resume_text) |
 | `GET /jobs/{id}/candidates` · `GET / DELETE /candidates/{id}` | list, read, delete (deletes their calls and transcripts) |
 | `POST /candidates/{id}/call` | ring the candidate now (job active, criteria approved) |
+| `POST /jobs/{id}/campaign` · `:pause` | start (or resume) calling the job's candidates, `{"max_concurrent"?}` 1-10; pause stops new calls, calls in progress finish |
+| `GET /jobs/{id}/campaign` | campaign status, calls in flight, candidates per status |
 | `GET /calls/{id}` · `GET /candidates/{id}/calls` | status, end reason, transcript |
 | `GET /decisions?job_id=&status=` · `GET /decisions/{id}` | the review queue; a decision with its answers, reasons, reviewer notes and drafted message |
 | `POST /decisions/{id}:approve` | send the drafted message (also retries a failed send); `{"force": true}` if the candidate was already notified or has a newer decision |
