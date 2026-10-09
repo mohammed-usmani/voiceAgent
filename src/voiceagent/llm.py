@@ -21,6 +21,8 @@ BACKOFF_S = (2, 4)
 
 class Models(Protocol):
     name: str
+    # The model that second-guesses this one's verdicts (the assessment's reviewer).
+    reviewer: "Models"
 
     def structured(self, schema: type[T], system: str, user: str) -> T: ...
 
@@ -36,10 +38,11 @@ class StructuredOutputError(RuntimeError):
 class FallbackModels:
     """Main model, retried once, then the backup model on a different provider."""
 
-    def __init__(self, main, backup, embedder, *, name: str) -> None:
+    def __init__(self, main, backup, embedder, *, name: str, reviewer: Models | None = None):
         self._attempts = (("main", main), ("main", main), ("backup", backup))
         self._embedder = embedder
         self.name = name
+        self.reviewer = reviewer if reviewer is not None else self
 
     def structured(self, schema: type[T], system: str, user: str) -> T:
         messages = [("system", system), ("human", user)]
@@ -115,11 +118,21 @@ class _JsonSchemaChat:
 
 def default_models(settings: Settings) -> FallbackModels:
     # Worst case per structured() call: 3 attempts x MODEL_TIMEOUT_S plus the backoff.
-    main = _JsonSchemaChat(_together_chat(settings.main_model, settings.together_api_key))
-    backup = _JsonSchemaChat(_together_chat(settings.backup_model, settings.together_api_key))
-    return FallbackModels(
-        main,
+    def chat(model: str) -> _JsonSchemaChat:
+        return _JsonSchemaChat(_together_chat(model, settings.together_api_key))
+
+    embedder = LocalEmbedder(settings.embedding_model)
+    backup = chat(settings.backup_model)
+    reviewer = FallbackModels(
+        chat(settings.reviewer_model),
         backup,
-        LocalEmbedder(settings.embedding_model),
+        embedder,
+        name=f"{settings.reviewer_model} (backup {settings.backup_model})",
+    )
+    return FallbackModels(
+        chat(settings.main_model),
+        backup,
+        embedder,
         name=f"{settings.main_model} (backup {settings.backup_model})",
+        reviewer=reviewer,
     )

@@ -22,6 +22,16 @@ class Settings:
     main_model: str = "deepseek-ai/DeepSeek-V4-Flash-0731"
     backup_model: str = "MiniMaxAI/MiniMax-M3"
     embedding_model: str = "BAAI/bge-base-en-v1.5"
+    # The assessment's reviewer agent challenges rejections: a stronger model than the
+    # one that made the call, so it doesn't just agree with itself.
+    reviewer_model: str = "deepseek-ai/DeepSeek-V4-Pro-0813"
+    # Outcome email. Without SMTP_HOST, mail is only recorded (messages table and log).
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_starttls: bool = True
 
 
 @lru_cache
@@ -33,4 +43,10 @@ def get_settings() -> Settings:
         ),
         api_key=os.environ.get("SCREENING_API_KEY", ""),
         together_api_key=os.environ.get("TOGETHER_API_KEY", ""),
+        smtp_host=os.environ.get("SMTP_HOST", ""),
+        smtp_port=int(os.environ.get("SMTP_PORT", "587")),
+        smtp_username=os.environ.get("SMTP_USERNAME", ""),
+        smtp_password=os.environ.get("SMTP_PASSWORD", ""),
+        smtp_from=os.environ.get("SMTP_FROM", ""),
+        smtp_starttls=os.environ.get("SMTP_STARTTLS", "true").lower() not in ("0", "false", "no"),
     )

@@ -25,11 +25,15 @@ class FakeModels:
     name = "fake"
 
     def __init__(
-        self, replies: dict[type, list] | None = None, embed_error: Exception | None = None
+        self,
+        replies: dict[type, list] | None = None,
+        embed_error: Exception | None = None,
+        reviewer: "FakeModels | None" = None,
     ):
         self.replies = {k: list(v) for k, v in (replies or {}).items()}
         self.embed_error = embed_error
         self.prompts: list[tuple[str, str, str]] = []
+        self.reviewer = reviewer if reviewer is not None else self
 
     def structured(self, schema, system, user):
         self.prompts.append((schema.__name__, system, user))

@@ -110,3 +110,20 @@ def test_local_embedder_makes_768_dim_query_and_document_vectors():
     assert [len(v) for v in docs] == [768, 768] and len(query) == 768
     similarity = [sum(a * b for a, b in zip(query, d, strict=True)) for d in docs]
     assert similarity[0] > similarity[1]
+
+
+def test_reviewer_runs_on_its_own_model_with_the_same_backup():
+    settings = Settings(database_url="", api_key="", together_api_key="t")
+    m = default_models(settings)
+    (_, reviewer), _, (_, backup) = m.reviewer._attempts
+    assert (reviewer.model_name, backup.model_name) == (
+        "deepseek-ai/DeepSeek-V4-Pro-0813",
+        "MiniMaxAI/MiniMax-M3",
+    )
+    assert m.reviewer.name.startswith("deepseek-ai/DeepSeek-V4-Pro-0813")
+    assert m.reviewer._embedder is m._embedder  # one local embedding model in memory
+
+
+def test_models_without_a_reviewer_review_themselves():
+    m = models(FakeChat(), FakeChat())
+    assert m.reviewer is m
