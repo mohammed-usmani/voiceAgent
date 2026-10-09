@@ -1,6 +1,7 @@
 import re
 import uuid
 from datetime import datetime
+from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -214,3 +215,64 @@ class RowError(BaseModel):
 class ImportResult(BaseModel):
     created: int
     errors: list[RowError]
+
+
+class AnswerOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    requirement_id: str
+    value: bool | float | str | None
+    declined: bool
+    quote: str
+    confidence: float
+    inconsistency: str | None
+
+
+class MessageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    decision_id: uuid.UUID
+    kind: str
+    to: str
+    subject: str
+    body: str
+    status: str
+    issues: list[str]
+    sent_at: datetime | None
+    error: str | None
+    updated_at: datetime
+
+
+class MessageEdit(BaseModel):
+    subject: str | None = Field(default=None, min_length=1, max_length=300)
+    body: str | None = Field(default=None, min_length=1, max_length=20000)
+
+
+class DecisionSummary(BaseModel):
+    id: uuid.UUID
+    job_id: uuid.UUID
+    candidate_id: uuid.UUID
+    candidate_name: str
+    call_id: uuid.UUID
+    result: str
+    final_result: str | None
+    score: float | None
+    status: str
+    summary: str
+    created_at: datetime
+
+
+class DecisionOut(DecisionSummary):
+    criteria_version_id: uuid.UUID
+    hard_failures: list[str]
+    reasons: list[dict]
+    model: str
+    reviewer_note: str | None
+    agent_review: dict | None
+    trace: list[dict]
+    answers: list[AnswerOut]
+    message: MessageOut | None
+
+
+class Override(BaseModel):
+    result: Literal["suitable", "not_suitable"] = Field(description="the recruiter's call")
+    note: str = Field(min_length=1, max_length=2000, description="why; kept for calibration")

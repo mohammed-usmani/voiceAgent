@@ -6,7 +6,7 @@ import os
 from fastapi import Depends, FastAPI
 from sqlalchemy.orm import sessionmaker as SessionMaker
 
-from voiceagent.api import candidates, events, jobs
+from voiceagent.api import candidates, decisions, events, jobs
 from voiceagent.api.deps import require_api_key
 from voiceagent.db.base import make_engine, make_sessionmaker
 from voiceagent.llm import Models, default_models
@@ -23,6 +23,7 @@ def create_app(*, sessionmaker: SessionMaker, models: Models, api_key: str) -> F
     auth = [Depends(require_api_key)]
     app.include_router(jobs.router, dependencies=auth)
     app.include_router(candidates.router, dependencies=auth)
+    app.include_router(decisions.router, dependencies=auth)
     app.include_router(events.router, dependencies=auth)
 
     @app.get("/health")
