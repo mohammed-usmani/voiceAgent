@@ -119,3 +119,26 @@ def test_search_embeds_the_query_as_a_query(session):
     assert [h.text for h in search_knowledge(session, models, "criteria", "python")] == [
         "python backend api"
     ]
+
+
+def test_similar_criteria_ignores_unrelated_roles(session):
+    # Retrieval used to return the nearest rows however far: a sales job was offered
+    # "Python" and "PostgreSQL" checks from a backend role.
+    models = FakeModels()
+    job = make_job(session, "Backend Engineer")
+    add_knowledge(
+        session,
+        models,
+        "criteria",
+        [
+            (job.id, "python backend api experience", _data("Python experience")),
+            (job.id, "forklift warehouse safety certificate", _data("Forklift licence")),
+        ],
+    )
+    session.commit()
+    lines = similar_criteria(session, models, "python backend api experience")
+    assert [line.split(":")[1].split("(")[0].strip() for line in lines] == ["Python experience"]
+
+
+def _data(label: str) -> dict:
+    return {"job_title": "Backend Engineer", "label": label, "hard": False, "question": "?"}

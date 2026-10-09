@@ -208,3 +208,11 @@ def test_failed_retrieval_does_not_stop_generation():
         models, title="Backend Engineer", description=JD, notes="", similar_lookup=down
     )
     assert [r.id for r in result.criteria.requirements] == ["python_years"]
+
+
+def test_prompts_read_experience_ranges_as_minimums():
+    # "1-3 years" became a hard "between 1 and 3", which would reject a candidate with 5.
+    from voiceagent.agents.criteria import CRITIC, DRAFTER
+
+    assert "1-3 years" in DRAFTER and ">= 1" in DRAFTER
+    assert "upper bound" in CRITIC

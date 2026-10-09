@@ -31,9 +31,12 @@ def search_knowledge(
     query: str,
     k: int = 8,
     exclude_job_id: uuid.UUID | None = None,
+    min_similarity: float | None = None,
 ) -> list[Knowledge]:
     vector = models.embed_query(query)
     stmt = select(Knowledge).where(Knowledge.kind == kind)
+    if min_similarity is not None:
+        stmt = stmt.where(Knowledge.embedding.cosine_distance(vector) <= 1 - min_similarity)
     if exclude_job_id is not None:
         stmt = stmt.where(or_(Knowledge.job_id.is_(None), Knowledge.job_id != exclude_job_id))
     stmt = stmt.order_by(Knowledge.embedding.cosine_distance(vector)).limit(k)
@@ -72,6 +75,12 @@ def _describe(data: dict) -> str:
     return f"{data['job_title']}: {data['label']} ({kind}) — asked as: {data['question']}"
 
 
+# Below this cosine similarity a past role isn't comparable. Measured with bge-base on job
+# descriptions vs. indexed requirements: the same or a related role scored 0.63-0.81
+# (sales vs. business development 0.65); unrelated roles at most 0.58 (sales vs. backend).
+MIN_SIMILARITY = 0.62
+
+
 def similar_criteria(
     session: Session,
     models: Models,
@@ -79,5 +88,13 @@ def similar_criteria(
     exclude_job_id: uuid.UUID | None = None,
     k: int = 8,
 ) -> list[str]:
-    hits = search_knowledge(session, models, "criteria", query, k=k, exclude_job_id=exclude_job_id)
+    hits = search_knowledge(
+        session,
+        models,
+        "criteria",
+        query,
+        k=k,
+        exclude_job_id=exclude_job_id,
+        min_similarity=MIN_SIMILARITY,
+    )
     return [_describe(h.data) for h in hits]

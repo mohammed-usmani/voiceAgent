@@ -98,6 +98,8 @@ check: at most {MAX_ASKED} requirements, the most decisive first. For each requi
 - hard=true only for must-haves the job description or notes make non-negotiable, with a
   rule: number → >=, <=, >, <, == or between [min, max]; boolean → == true/false;
   choice → == one option, or in a list of options. Text answers are never hard.
+  An experience range like "1-3 years" means at least the lower bound: rule >= 1. Use an
+  upper bound only when the text clearly sets a maximum ("no more than 5 years").
 - otherwise hard=false and a weight between 0 and 1 for how much it matters
 - rubric for text answers: what a good answer contains
 - sensitive=true for salary and other personal topics the candidate may decline
@@ -118,8 +120,9 @@ problems, each tied to a requirement id when it applies:
   skills"); suggest an askable question instead
 - contradiction: conflicts with the job description, the notes or another requirement
 - units: wrong or missing unit, or a threshold in a different unit than the question asks
-- other: a hard rule stricter or looser than the text says, a leading question, or a
-  must-have the job description states that is missing
+- other: a hard rule stricter or looser than the text says (e.g. an upper bound on
+  experience the text doesn't clearly state), a leading question, or a must-have the job
+  description states that is missing
 Return no issues if the criteria are sound."""
 
 
