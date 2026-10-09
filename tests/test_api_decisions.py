@@ -4,14 +4,17 @@ from sqlalchemy import select
 
 from tests.fakes import FakeModels
 from tests.seed import seed_decision, seed_finished_call, seed_message
-from voiceagent.agents.messages import Check, Letter
+from voiceagent.agents.messages import InviteCheck, Letter, RejectionCheck
 from voiceagent.api.app import create_app
 from voiceagent.db.base import make_sessionmaker
 from voiceagent.db.models import Answer, Candidate, Decision, Event, Knowledge, Message, Task
 from voiceagent.worker.main import run_once
 
 KEY = {"X-API-Key": "test-key"}
-INVITE = Letter(subject="Next steps at Acme", body="Hi Priya, we'd like to move forward.")
+INVITE = Letter(
+    subject="Next steps at Acme",
+    body="Hi Priya, we'd like to move forward. The team will be in touch to schedule.",
+)
 REJECTION = Letter(subject="Your application to Acme", body="Hi Priya, thank you.")
 
 
@@ -155,7 +158,7 @@ def test_override_redrafts_indexes_and_waits_for_approval(client, engine, sessio
     )
     assert client.post(f"/decisions/{d.id}:approve", headers=KEY).status_code == 409
 
-    drain(engine, FakeModels({Letter: [INVITE], Check: [Check()]}))
+    drain(engine, FakeModels({Letter: [INVITE], InviteCheck: [InviteCheck()]}))
     session.expire_all()
     m = session.scalars(select(Message)).one()
     assert (m.kind, m.status) == ("invite", "draft")  # an override is never auto-sent
@@ -174,7 +177,7 @@ def test_overriding_back_and_forth_sends_only_the_final_result(client, engine, s
             f"/decisions/{d.id}:override", json={"result": result, "note": "n"}, headers=KEY
         )
         assert r.status_code == 200
-    drain(engine, FakeModels({Letter: [REJECTION], Check: [Check()]}))
+    drain(engine, FakeModels({Letter: [REJECTION], RejectionCheck: [RejectionCheck()]}))
     session.expire_all()
     m = session.scalars(select(Message)).one()
     assert (m.kind, m.status) == ("rejection", "draft")

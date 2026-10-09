@@ -58,17 +58,25 @@ def test_a_missed_must_have_is_never_suitable_and_is_reviewed(models):
     assert a.agent_review is not None  # the reviewer model challenged it
 
 
-@pytest.mark.parametrize("kind", ["invite", "rejection"])
-def test_messages_pass_their_own_checks(models, kind):
+@pytest.mark.parametrize(
+    ("kind", "facts"),
+    [
+        ("invite", FACTS),
+        ("invite", FACTS | {"interview_process": None}),  # only the generic next-steps line
+        ("rejection", FACTS),
+    ],
+)
+def test_plain_messages_pass_the_checker(models, kind, facts):
     d = run_message_agent(
         models,
         kind=kind,
         candidate_name="Priya Sharma",
         job_title="Backend Engineer",
         company_name="Acme",
-        job_facts=FACTS,
+        job_facts=facts,
         requirement_labels=LABELS,
     )
     print(d.subject, d.body, d.issues, f"rounds={d.rounds}", sep="\n")
-    assert letter_issues(kind, Letter(subject=d.subject, body=d.body), labels=LABELS) == []
-    assert "Priya" in d.body
+    assert d.issues == []  # passed within MAX_ROUNDS, so an invite can be sent unattended
+    letter = Letter(subject=d.subject, body=d.body)
+    assert letter_issues(kind, letter, labels=LABELS, first_name="Priya") == []

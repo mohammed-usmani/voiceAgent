@@ -3,7 +3,7 @@ from sqlalchemy import select, update
 from tests.fakes import FakeModels
 from tests.seed import seed_finished_call
 from voiceagent.agents.assessment import Evidence, EvidenceSet, Review, SoftScore, SoftScores
-from voiceagent.agents.messages import Check, Letter
+from voiceagent.agents.messages import Flag, InviteCheck, Letter, RejectionCheck
 from voiceagent.db.base import make_sessionmaker
 from voiceagent.db.models import (
     Answer,
@@ -21,7 +21,10 @@ from voiceagent.worker.queue import enqueue
 PY = "I have been writing Python for about five years now."
 PUNE = "Yes, Pune three days a week works for me."
 SALARY = "I am expecting around 30 lakhs per annum."
-INVITE = Letter(subject="Next steps at Acme", body="Hi Priya, we'd like to move forward.")
+INVITE = Letter(
+    subject="Next steps at Acme",
+    body="Hi Priya, we'd like to move forward. The team will be in touch to schedule.",
+)
 REJECTION = Letter(subject="Your application to Acme", body="Hi Priya, thank you for your time.")
 
 
@@ -47,7 +50,8 @@ def replies(python=5.0, salary_score=0.8, letter=INVITE, check=None):
         ],
         Review: [Review(agree=True, notes="")],
         Letter: [letter],
-        Check: [check or Check()],
+        InviteCheck: [check or InviteCheck()],
+        RejectionCheck: [RejectionCheck()],
     }
 
 
@@ -109,10 +113,15 @@ def test_invites_wait_for_the_recruiter_when_auto_send_is_off(engine, session, m
 
 def test_an_invite_the_checker_never_passed_is_not_sent(engine, session, mailer):
     postcall(session)
-    drain(engine, FakeModels(replies(check=Check(issues=["promises an interview date"]))))
+    sentence = "The team will be in touch to schedule."
+    flag = Flag(flagged=True, sentence=sentence, why="promises an interview date")
+    drain(engine, FakeModels(replies(check=InviteCheck(invents_facts=flag))))
     session.expire_all()
     m = session.scalars(select(Message)).one()
-    assert (m.status, m.issues) == ("draft", ["promises an interview date"])
+    assert (m.status, m.issues) == (
+        "draft",
+        [f'invents facts: promises an interview date ("{sentence}")'],
+    )
     assert session.scalars(select(Decision)).one().status == "pending_review"
     assert mailer.sent == []
 
@@ -227,7 +236,7 @@ def test_an_override_during_drafting_drops_the_stale_draft(engine, session):
     session.commit()
 
     def override_mid_draft(schema):
-        if schema is Check:
+        if schema is InviteCheck:
             with make_sessionmaker(engine)() as s:
                 s.execute(
                     update(Decision)

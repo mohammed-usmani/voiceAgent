@@ -46,3 +46,10 @@ def verify_answer(quote: str, transcript: list[dict]) -> bool:
     quote under three words gets no drift allowance, so it must match exactly."""
     said = "\n".join(t.get("text", "") for t in transcript if t.get("role") == "candidate")
     return verify_quote(quote, said, min_words=1)
+
+
+def untrusted(tag: str, text: str) -> str:
+    """`text` from the candidate, fenced in <tag> tags for a prompt. Its own tags are removed,
+    so it can't close the block and continue as instructions."""
+    clean = re.sub(rf"<\s*/?\s*{tag}\s*>", "", text or "", flags=re.I)
+    return f"<{tag}>\n{clean}\n</{tag}>"
