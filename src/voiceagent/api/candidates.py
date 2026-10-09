@@ -7,7 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from voiceagent.api.deps import get_session
@@ -20,7 +20,7 @@ from voiceagent.api.schemas import (
     ImportResult,
     RowError,
 )
-from voiceagent.call.store import close_stale_calls
+from voiceagent.call.store import close_stale_calls, queue_call
 from voiceagent.db.models import (
     ACTIVE_CALL_STATUSES,
     FINISHED_CANDIDATE_STATUSES,
@@ -31,7 +31,6 @@ from voiceagent.db.models import (
 )
 from voiceagent.events import emit
 from voiceagent.knowledge.store import delete_overrides
-from voiceagent.worker.queue import enqueue
 
 router = APIRouter()
 DB = Annotated[Session, Depends(get_session)]
@@ -200,7 +199,8 @@ def delete_candidate(candidate_id: uuid.UUID, session: DB) -> Response:
 
 @router.post("/candidates/{candidate_id}/call", status_code=202, response_model=CallOut)
 def call_candidate(candidate_id: uuid.UUID, session: DB, body: CallRequest | None = None) -> Call:
-    """Queue a call now. Calling hours, retries and campaigns arrive in milestone 5.
+    """Queue a call now, whatever the hour: calling hours, retries and callbacks are the
+    campaign's (POST /jobs/{id}/campaign), not this endpoint's.
 
     A candidate who was already screened, declined or withdrew is only called again with
     `{"force": true}`."""
@@ -228,27 +228,7 @@ def call_candidate(candidate_id: uuid.UUID, session: DB, body: CallRequest | Non
     )
     if active is not None:
         raise HTTPException(status_code=409, detail="a call to this candidate is already active")
-    previous = session.scalar(
-        select(func.count()).select_from(Call).where(Call.candidate_id == candidate.id)
-    )
-    call = Call(
-        candidate_id=candidate.id,
-        criteria_version_id=criteria.id,
-        attempt=previous + 1,
-        status="queued",
-        prior_candidate_status=candidate.status,
-    )
-    session.add(call)
-    session.flush()
-    candidate.status = "calling"
-    enqueue(session, "dial", {"call_id": str(call.id)})
-    emit(
-        session,
-        "call",
-        call.id,
-        "queued",
-        {"candidate_id": str(candidate.id), "attempt": call.attempt},
-    )
+    call = queue_call(session, candidate, criteria.id)
     session.commit()
     return call
 

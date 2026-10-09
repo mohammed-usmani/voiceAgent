@@ -14,6 +14,8 @@ from voiceagent.call.store import (
     fail_call,
     finish_call,
     load_call,
+    queue_call,
+    stop_call,
 )
 from voiceagent.db.base import make_sessionmaker
 from voiceagent.db.models import Call, Candidate, Event, Task
@@ -211,3 +213,65 @@ def test_an_agent_error_is_saved_as_a_failed_call_not_a_screening(engine, sessio
     )
     assert session.get(Candidate, c.candidate_id).status == "pending"
     assert session.scalars(select(Task)).all() == []  # nothing to assess
+
+
+def unanswered(session, candidate, cv, n):
+    for attempt in range(1, n + 1):
+        seed_call(session, candidate, cv, attempt=attempt, status="no_answer")
+
+
+def test_the_third_unanswered_call_makes_the_candidate_unreachable(session):
+    # Review focus 3: someone who never picks up is called three times, then left alone.
+    job, cv = seed_job(session)
+    candidate = seed_candidate(session, job, status="calling")
+    unanswered(session, candidate, cv, 2)
+    call = seed_call(session, candidate, cv, attempt=3, status="ringing")
+    stop_call(session, call, "voicemail", "answered by a machine")
+    session.commit()
+    assert session.get(Candidate, candidate.id).status == "unreachable"
+    assert [(e.entity, e.type) for e in session.scalars(select(Event).order_by(Event.id))] == [
+        ("candidate", "unreachable"),
+        ("call", "voicemail"),
+    ]
+
+
+def test_fewer_unanswered_calls_leave_the_candidate_retryable(session):
+    job, cv = seed_job(session)
+    candidate = seed_candidate(session, job, status="calling")
+    unanswered(session, candidate, cv, 1)
+    call = seed_call(session, candidate, cv, attempt=2, status="ringing")
+    stop_call(session, call, "voicemail", "answered by a machine")
+    session.commit()
+    assert (call.status, call.end_reason) == ("voicemail", "voicemail")
+    assert session.get(Candidate, candidate.id).status == "no_answer"
+
+
+def test_a_finished_candidate_stays_finished_however_many_calls_failed(session):
+    job, cv = seed_job(session)
+    candidate = seed_candidate(session, job, status="calling")
+    unanswered(session, candidate, cv, 2)
+    call = seed_call(
+        session, candidate, cv, attempt=3, status="queued", prior_candidate_status="screened"
+    )
+    stop_call(session, call, "failed", "trunk down")
+    session.commit()
+    assert session.get(Candidate, candidate.id).status == "screened"
+
+
+def test_queue_call_numbers_the_attempt_and_queues_the_dial(session):
+    job, cv = seed_job(session)
+    candidate = seed_candidate(session, job, status="no_answer")
+    unanswered(session, candidate, cv, 1)
+    call = queue_call(session, candidate, cv.id, by="campaign", reason="retry")
+    session.commit()
+    assert (call.attempt, call.status, call.prior_candidate_status) == (2, "queued", "no_answer")
+    assert candidate.status == "calling"
+    task = session.scalars(select(Task)).one()
+    assert (task.kind, task.payload) == ("dial", {"call_id": str(call.id)})
+    event = session.scalars(select(Event)).one()
+    assert event.data == {
+        "candidate_id": str(candidate.id),
+        "attempt": 2,
+        "by": "campaign",
+        "reason": "retry",
+    }

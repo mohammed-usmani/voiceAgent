@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from voiceagent.criteria.schema import Criteria
@@ -14,6 +14,8 @@ from voiceagent.db.base import make_engine, make_sessionmaker
 from voiceagent.db.models import (
     ACTIVE_CALL_STATUSES,
     FINISHED_CANDIDATE_STATUSES,
+    MAX_UNANSWERED,
+    UNANSWERED_CALL_STATUSES,
     Call,
     Candidate,
     CriteriaVersion,
@@ -72,22 +74,63 @@ def close_stale_calls(session: Session, candidate_id: uuid.UUID | None = None) -
 
 
 def stop_call(session: Session, call: Call, status: str, error: str) -> None:
-    """End a call that never became a conversation: nobody answered, the dial failed, or
-    the agent couldn't load it. The candidate goes back to what they were before this call
-    (or no_answer), so they can be called again. Not committed."""
+    """End a call that never became a conversation: nobody answered, a machine did, the
+    dial failed, or the agent couldn't load it. The candidate goes back to what they were
+    before this call (or no_answer), so they can be called again, unless this was their
+    MAX_UNANSWERED-th such call: then they are `unreachable`. Not committed."""
     call.status = status
-    call.end_reason = "error" if status == "failed" else None
+    call.end_reason = {"failed": "error", "voicemail": "voicemail"}.get(status)
     call.error = error[:2000]
     call.ended_at = datetime.now(UTC)
     prior = call.prior_candidate_status
     if prior in (None, "calling"):
         prior = "pending"
     candidate = session.get(Candidate, call.candidate_id)
-    if status == "no_answer" and prior not in FINISHED_CANDIDATE_STATUSES:
+    unanswered = session.scalar(
+        select(func.count())
+        .select_from(Call)
+        .where(Call.candidate_id == candidate.id, Call.status.in_(UNANSWERED_CALL_STATUSES))
+    )
+    if prior in FINISHED_CANDIDATE_STATUSES:
+        candidate.status = prior  # e.g. a failed re-call of a screened candidate
+    elif unanswered >= MAX_UNANSWERED:
+        candidate.status = "unreachable"
+        emit(session, "candidate", candidate.id, "unreachable", {"unanswered_calls": unanswered})
+    elif status in ("no_answer", "voicemail"):
         candidate.status = "no_answer"
     else:
-        candidate.status = prior  # e.g. a failed re-call of a screened candidate
+        candidate.status = prior
     emit(session, "call", call.id, status, {"error": error[:500]})
+
+
+def queue_call(
+    session: Session, candidate: Candidate, criteria_version_id: uuid.UUID, **event: str
+) -> Call:
+    """Queue a call to the candidate now, with its dial task; the candidate is `calling`.
+    The caller holds the candidate's lock and has checked that no call is active. `event`
+    is added to the call's `queued` event. Not committed."""
+    previous = session.scalar(
+        select(func.count()).select_from(Call).where(Call.candidate_id == candidate.id)
+    )
+    call = Call(
+        candidate_id=candidate.id,
+        criteria_version_id=criteria_version_id,
+        attempt=previous + 1,
+        status="queued",
+        prior_candidate_status=candidate.status,
+    )
+    session.add(call)
+    session.flush()
+    candidate.status = "calling"
+    enqueue(session, "dial", {"call_id": str(call.id)})
+    emit(
+        session,
+        "call",
+        call.id,
+        "queued",
+        {"candidate_id": str(candidate.id), "attempt": call.attempt} | event,
+    )
+    return call
 
 
 CANDIDATE_STATUS = {
