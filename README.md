@@ -158,10 +158,13 @@ Nimbus Labs demo.
 After the call an assessment agent (LangGraph) extracts each answer from the transcript and
 checks that its quote is the candidate's own words, applies the hard requirements' rules in
 code, scores the rest against their rubrics (calibrated by past recruiter overrides), and
-has a second, stronger model challenge every rejection and every verdict resting on a weak
-answer. A message agent drafts the invite or a reason-free rejection, checked before it is
-kept. Invites to suitable candidates go out automatically (per job); every rejection and
-`needs_review` waits for a recruiter to approve or override.
+has a second, stronger model challenge every rejection, every verdict resting on a weak
+answer and every invite that would go out unattended. A soft requirement with no verified
+answer sends the candidate to a recruiter instead of counting for or against them. A message
+agent drafts the invite or a reason-free rejection; code checks it for leaked reasons,
+promises, the name and next steps, and a model for tone and invented facts. Invites to
+suitable candidates go out automatically (per job); every rejection and `needs_review`
+waits for a recruiter to approve or override.
 
 ```bash
 docker compose up -d postgres
@@ -182,8 +185,8 @@ uv run voiceagent dev        # the call agent; reads screening calls from DATABA
 | `POST /candidates/{id}/call` | ring the candidate now (job active, criteria approved) |
 | `GET /calls/{id}` · `GET /candidates/{id}/calls` | status, end reason, transcript |
 | `GET /decisions?job_id=&status=` · `GET /decisions/{id}` | the review queue; a decision with its answers, reasons, reviewer notes and drafted message |
-| `POST /decisions/{id}:approve` | send the drafted message (also retries a failed send) |
-| `POST /decisions/{id}:override` | `{"result", "note"}`: the recruiter's call; re-drafts the message and calibrates future scoring |
+| `POST /decisions/{id}:approve` | send the drafted message (also retries a failed send); `{"force": true}` if the candidate was already notified or has a newer decision |
+| `POST /decisions/{id}:override` | `{"result", "note", "requirement_ids"?}`: the recruiter's call; re-drafts the message and calibrates future scoring on the named answers. The note is shown to the scorer for other candidates: keep names and personal details out of it |
 | `GET / PATCH /messages/{id}` | read, or edit the subject/body before sending |
 | `GET /events?after=` | event feed |
 
