@@ -9,6 +9,7 @@ import re
 from livekit.agents import llm
 from livekit.agents.types import DEFAULT_API_CONNECT_OPTIONS
 
+from voiceagent.outcomes.email import Email
 from voiceagent.settings import EMBEDDING_DIM
 
 
@@ -96,3 +97,16 @@ class _ScriptedStream(llm.LLMStream):
             else:
                 delta = llm.ChoiceDelta(role="assistant", tool_calls=[part])
             self._event_ch.send_nowait(llm.ChatChunk(id=f"chunk_{i}", delta=delta))
+
+
+class FakeMailer:
+    """Records what would have been emailed; `error` makes every send fail."""
+
+    def __init__(self, error: Exception | None = None) -> None:
+        self.error = error
+        self.sent: list[Email] = []
+
+    def send(self, email: Email) -> None:
+        if self.error is not None:
+            raise self.error
+        self.sent.append(email)

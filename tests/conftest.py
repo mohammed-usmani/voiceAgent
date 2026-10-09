@@ -6,6 +6,7 @@ from alembic.config import Config
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 
+from tests.fakes import FakeMailer
 from voiceagent.db.base import make_sessionmaker
 
 TEST_URL = os.environ.get(
@@ -47,3 +48,11 @@ def session(engine):
     s = make_sessionmaker(engine)()
     yield s
     s.close()
+
+
+@pytest.fixture(autouse=True)
+def mailer(monkeypatch):
+    """No test ever sends real email: every send goes to this fake."""
+    fake = FakeMailer()
+    monkeypatch.setattr("voiceagent.worker.send.MAILER", fake)
+    return fake

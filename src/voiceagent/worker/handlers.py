@@ -14,6 +14,7 @@ from voiceagent.knowledge.store import similar_criteria
 from voiceagent.llm import Models
 from voiceagent.worker.dial import dial, dial_failed
 from voiceagent.worker.queue import heartbeat
+from voiceagent.worker.send import send_message, send_message_failed
 
 
 def generate_criteria(session: Session, models: Models, task: Task) -> None:
@@ -91,4 +92,5 @@ HANDLERS = {
     "generate_criteria": (generate_criteria, generate_criteria_failed),
     "dial": (dial, dial_failed),
     "postcall": (postcall, None),
+    "send_message": (send_message, send_message_failed),
 }
