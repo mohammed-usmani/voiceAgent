@@ -7,14 +7,15 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import OperationalError
 
 from tests.fakes import FakeModels
+from tests.seed import seed_call, seed_candidate, seed_job
 from voiceagent.agents.criteria import Critique, Draft
 from voiceagent.api.app import create_app
 from voiceagent.criteria.schema import Criteria, JobFacts, Requirement, Rule
 from voiceagent.db.base import make_sessionmaker
-from voiceagent.db.models import CriteriaVersion, Event, Job, Task
+from voiceagent.db.models import Call, Campaign, Candidate, CriteriaVersion, Event, Job, Task
 from voiceagent.llm import StructuredOutputError
 from voiceagent.worker import main as worker_main
-from voiceagent.worker.main import run_once
+from voiceagent.worker.main import run_once, sweep_calls
 from voiceagent.worker.queue import LEASE, enqueue
 
 JD = "Backend Engineer. Requirements: 3+ years of Python experience. Remote-friendly team."
@@ -301,3 +302,40 @@ def test_description_edited_during_generation_leaves_criteria_stale(engine, sess
     run_once(make_sessionmaker(engine), Hooked(GOOD_REPLIES, edit_midway))
     session.expire_all()
     assert session.get(Job, job.id).criteria_stale is True
+
+
+NOON_IST = datetime(2026, 10, 12, 6, 30, tzinfo=UTC)
+
+
+def test_the_sweep_runs_due_campaign_calls(engine, session):
+    job, _ = seed_job(session)
+    candidate = seed_candidate(session, job)
+    session.add(Campaign(job_id=job.id, started_at=NOON_IST))
+    session.commit()
+    sweep_calls(make_sessionmaker(engine), now=lambda: NOON_IST)
+    session.expire_all()
+    assert session.get(Candidate, candidate.id).status == "calling"
+    assert session.scalars(select(Task.kind)).all() == ["dial"]
+
+
+def test_a_callback_waiting_for_its_time_is_left_alone_by_the_sweep(engine, session):
+    # M2 ruling: the stale-call sweep must not close calls scheduled for later. A callback
+    # has no call until it is due, so there is nothing for the sweep to close early.
+    job, cv = seed_job(session)
+    candidate = seed_candidate(session, job, status="callback")
+    seed_call(
+        session,
+        candidate,
+        cv,
+        status="completed",
+        end_reason="callback_requested",
+        callback_at=NOON_IST + timedelta(days=1),
+        ended_at=NOON_IST - timedelta(hours=3),
+    )
+    session.add(Campaign(job_id=job.id, started_at=NOON_IST))
+    session.commit()
+    sweep_calls(make_sessionmaker(engine), now=lambda: NOON_IST)
+    session.expire_all()
+    assert session.get(Candidate, candidate.id).status == "callback"
+    assert [c.status for c in session.scalars(select(Call))] == ["completed"]
+    assert session.get(Campaign, job.id).status == "active"

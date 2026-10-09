@@ -1,7 +1,8 @@
 """The `dial` task: ring the candidate, and once they answer, the agent takes over.
 
-ponytail: one worker blocks while a phone rings (up to the SIP ringing timeout); campaigns
-(milestone 5) need several workers or async dialing.
+ponytail: one worker blocks while a phone rings (up to the SIP ringing timeout), so a
+campaign's calls ring one after another per worker; run several workers to ring in
+parallel, or make dialing async if that is too slow.
 """
 
 import asyncio

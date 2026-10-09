@@ -2,6 +2,8 @@
 
 import logging
 import time
+from collections.abc import Callable
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import sessionmaker as SessionMaker
 
@@ -9,6 +11,7 @@ from voiceagent.call.store import close_stale_calls
 from voiceagent.db.base import make_engine, make_sessionmaker
 from voiceagent.llm import Models, default_models
 from voiceagent.settings import get_settings
+from voiceagent.worker.campaign import tick
 from voiceagent.worker.handlers import HANDLERS
 from voiceagent.worker.queue import claim, complete, fail
 
@@ -48,12 +51,21 @@ def run_once(sessionmaker: SessionMaker, models: Models) -> bool:
         return True
 
 
-def sweep_calls(sessionmaker: SessionMaker) -> None:
-    """Close calls whose agent never reported back (see close_stale_calls)."""
+def sweep_calls(
+    sessionmaker: SessionMaker, now: Callable[[], datetime] = lambda: datetime.now(UTC)
+) -> None:
+    """Once a minute: close calls whose agent never reported back (see close_stale_calls),
+    then queue the campaign calls that are due (see campaign.tick).
+
+    Nothing is queued ahead of time: a callback or retry gets its call only when it is
+    due, so the stale-call sweep never sees a call that is merely waiting for its time.
+    """
     with sessionmaker() as session:
         if closed := close_stale_calls(session):
             logger.warning("closed %s call(s) the agent never reported back", closed)
         session.commit()
+        if queued := tick(session, now()):
+            logger.info("campaigns queued %s call(s)", queued)
 
 
 def main() -> None:
