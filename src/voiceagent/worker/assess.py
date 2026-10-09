@@ -72,7 +72,7 @@ def postcall(session: Session, models: Models, task: Task) -> None:
     job = session.get(Job, candidate.job_id)
     cv = session.get(CriteriaVersion, call.criteria_version_id)
     requirements = [Requirement.model_validate(r) for r in cv.requirements]
-    pass_threshold, title = cv.pass_threshold, job.title
+    pass_threshold, title, auto_send = cv.pass_threshold, job.title, job.auto_send_invites
     transcript, resume = list(call.transcript), candidate.resume_text
     end_reason = call.end_reason or "unknown"
     session.rollback()  # hold no transaction (or locks) through the slow agent run
@@ -92,6 +92,7 @@ def postcall(session: Session, models: Models, task: Task) -> None:
         end_reason=end_reason,
         overrides_lookup=overrides,
         heartbeat=lambda: heartbeat(session, task),
+        auto_send=auto_send,
     )
 
     call = lock_call(session, call_id)  # the candidate, then the call: no deadlock with delete

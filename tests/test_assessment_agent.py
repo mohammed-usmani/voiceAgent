@@ -40,10 +40,12 @@ def scores(salary=0.8, quote=SALARY_QUOTE):
     )
 
 
-def assess(models, *, transcript=TRANSCRIPT, end_reason="completed", lookup=None, **kw):
+def assess(
+    models, *, transcript=TRANSCRIPT, end_reason="completed", lookup=None, requirements=REQS, **kw
+):
     return run_assessment(
         models,
-        requirements=REQS,
+        requirements=requirements,
         pass_threshold=0.6,
         transcript=transcript,
         resume="4 years at Infosys building Django services.",
@@ -149,14 +151,16 @@ def test_low_confidence_must_have_is_unknown():
     assert "Must-have unconfirmed: Python experience" in a.summary
 
 
-def test_declined_salary_never_counts_against_the_candidate():
+def test_a_declined_salary_is_reviewed_never_rejected():
     models = FakeModels(
         {EvidenceSet: [evidence(salary=None, declined=True, quote="I'd rather not say")]}
     )
     transcript = [*TRANSCRIPT[:6], {"role": "candidate", "text": "I'd rather not say."}]
     a = assess(models, transcript=transcript)
     assert a.reasons[2]["verdict"] == "declined"
-    assert (a.result, a.score) == ("suitable", None)  # the must-haves decide
+    # No weighted requirement has evidence: not suitable on nothing, and not rejected.
+    assert (a.result, a.score) == ("needs_review", None)
+    assert "Not assessed: Expected salary (declined)" in a.summary
     assert "SoftScores" not in asked(models)
 
 
@@ -253,3 +257,73 @@ def test_heartbeat_before_every_step():
     models = FakeModels({EvidenceSet: [evidence()], SoftScores: [scores(0.8)]})
     assess(models, heartbeat=lambda: beats.append(1))
     assert len(beats) == 6  # calibrate, evidence, rules, score, verdict, finalize
+
+
+def test_a_declined_answer_leaves_the_other_weighted_answers_to_decide():
+    comms = REQS[2].model_copy(
+        update={"id": "communication", "label": "Communication", "kind": "text", "sensitive": False}
+    )
+    ev = evidence(salary=None, declined=True, quote="I'd rather not say")
+    ev.answers.append(
+        Evidence(requirement_id="communication", value="clear", quote=PUNE_QUOTE, confidence=0.9)
+    )
+    transcript = [*TRANSCRIPT, {"role": "candidate", "text": "I'd rather not say."}]
+    score = SoftScore(requirement_id="communication", score=0.8, quote=PUNE_QUOTE)
+    models = FakeModels({EvidenceSet: [ev], SoftScores: [SoftScores(scores=[score])]})
+    a = assess(models, transcript=transcript, requirements=[*REQS, comms])
+    assert (a.result, a.score) == ("suitable", 0.8)
+
+
+def test_a_soft_score_on_an_unverified_quote_never_rejects_even_if_the_reviewer_agrees():
+    for quote in ("", "I want 20 lakhs"):
+        models = FakeModels(
+            {
+                EvidenceSet: [evidence()],
+                SoftScores: [scores(0.0, quote=quote)],
+                Review: [Review(agree=True, notes="")],
+            }
+        )
+        a = assess(models)
+        salary = a.reasons[2]
+        assert (salary["verdict"], salary["score"]) == ("unknown", None)
+        assert (a.result, a.score) == ("needs_review", None)
+        assert "Not assessed: Expected salary (quote not found" in a.summary
+
+
+def test_a_requirement_the_scorer_omitted_is_reviewed_not_passed():
+    models = FakeModels({EvidenceSet: [evidence()], SoftScores: [SoftScores(scores=[])]})
+    a = assess(models)
+    assert (a.result, a.score) == ("needs_review", None)
+    assert a.reasons[2]["verdict"] == "unknown"
+    assert "Not assessed: Expected salary (not scored)" in a.summary
+
+
+def test_an_unanswered_weighted_requirement_is_reviewed_not_passed():
+    models = FakeModels({EvidenceSet: [evidence(salary=None, quote="", confidence=0.0)]})
+    a = assess(models)
+    assert (a.result, a.score) == ("needs_review", None)
+    assert "Not assessed: Expected salary (not answered)" in a.summary
+
+
+def test_a_hard_failure_still_rejects_when_soft_evidence_is_missing():
+    models = FakeModels(
+        {
+            EvidenceSet: [evidence(python=2.0)],
+            SoftScores: [SoftScores(scores=[])],
+            Review: [Review(agree=True, notes="")],
+        }
+    )
+    assert assess(models).result == "not_suitable"
+
+
+def test_a_suitable_result_that_would_be_sent_unattended_is_reviewed():
+    models = FakeModels(
+        {
+            EvidenceSet: [evidence()],
+            SoftScores: [scores(0.8)],
+            Review: [Review(agree=False, notes="the salary answer was hedged")],
+        }
+    )
+    a = assess(models, auto_send=True)
+    assert a.agent_review["challenged"] == "suitable"
+    assert a.result == "needs_review"

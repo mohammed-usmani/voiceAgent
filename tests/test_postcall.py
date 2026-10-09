@@ -100,6 +100,21 @@ def test_a_suitable_candidate_is_invited_automatically(engine, session, mailer):
     ]
 
 
+def test_an_invite_the_reviewer_doubts_is_not_sent_unattended(engine, session, mailer):
+    postcall(session)
+    models = FakeModels(replies())
+    models.replies[Review] = [Review(agree=False, notes="the salary answer was hedged")]
+    drain(engine, models)
+    session.expire_all()
+    d = session.scalars(select(Decision)).one()
+    assert (d.result, d.status, d.agent_review["challenged"]) == (
+        "needs_review",
+        "pending_review",
+        "suitable",
+    )
+    assert mailer.sent == []
+
+
 def test_invites_wait_for_the_recruiter_when_auto_send_is_off(engine, session, mailer):
     call = postcall(session, auto_send_invites=False)
     drain(engine, FakeModels(replies()))

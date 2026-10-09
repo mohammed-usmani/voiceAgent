@@ -8,8 +8,9 @@ each quote against the candidate's own words (an unverifiable quote can't decide
 anything). `rules` applies the hard requirements' rules in code (rules.py). `score` rates
 the soft requirements against their rubrics, with recruiter overrides on similar
 requirements as calibration examples. `verdict` applies the thresholds. `review` is a
-second model that challenges every rejection and every verdict resting on a weak answer;
-it can only send the candidate to a human, never accept or reject anyone.
+second model that challenges every rejection, every verdict resting on a weak answer and
+every invite that would be sent unattended; it can only send the candidate to a human,
+never accept or reject anyone.
 """
 
 import json
@@ -183,9 +184,12 @@ def run_assessment(
     end_reason: str,
     overrides_lookup: Callable[[Requirement], list[str]],
     heartbeat: Callable[[], None] = lambda: None,
+    auto_send: bool = False,
 ) -> Assessment:
     """`overrides_lookup(requirement)` returns calibration examples for a soft requirement.
-    `heartbeat` runs before every step, so a worker can keep its task's lease alive."""
+    `heartbeat` runs before every step, so a worker can keep its task's lease alive.
+    `auto_send`: a suitable result would email an invite with no human in the loop, so the
+    reviewer challenges it too."""
     soft = [r for r in requirements if not r.hard]
     convo = format_transcript(transcript)
     resume_block = f"Résumé:\n{resume or '(none)'}"
@@ -265,8 +269,19 @@ def run_assessment(
         }
 
     def verdict(state: State) -> State:
+        """Thresholds over the evidence.
+
+        A weighted soft requirement counts towards the score only when it was scored on a
+        quote that is the candidate's own words. One that was not answered (and not
+        declined), skipped by the scorer, or scored on an unverified quote is "Not assessed";
+        so is every weighted requirement when all of them were declined. Anything not
+        assessed leaves no score and a result of at best needs_review: missing evidence never
+        makes anyone suitable (an invite can go out unattended) nor not_suitable on the soft
+        score. A declined answer alone never counts against anyone. A failed must-have still
+        rejects, on its own verified evidence. Without weighted soft requirements, the
+        must-haves decide."""
         ev, hard, scores = state["evidence"], state["hard"], state["scores"]
-        reasons, total, weight = [], 0.0, 0.0
+        reasons, total, weight, missing = [], 0.0, 0.0, []
         for r in requirements:
             e = ev[r.id]
             reason = {
@@ -277,35 +292,46 @@ def run_assessment(
                 "confidence": e.confidence,
                 "note": e.note,
             }
+            gap = None
             if r.hard:
                 reason |= {"verdict": hard[r.id], "note": _hard_note(r, e, hard[r.id])}
             elif e.declined:
                 reason |= {"verdict": "declined", "note": "declined to answer; not scored"}
-            elif r.id in scores:
+            elif r.id in scores and verify_answer(scores[r.id].quote, transcript):
                 s = scores[r.id]
-                confidence = e.confidence
-                note = s.note
-                if not verify_answer(s.quote, transcript):
-                    confidence = min(confidence, UNVERIFIED_CONFIDENCE)
-                    note = f"{note}; quote not found in the candidate's words".lstrip("; ")
-                reason |= {
-                    "verdict": "scored",
-                    "score": s.score,
-                    "quote": s.quote,
-                    "confidence": confidence,
-                    "note": note,
-                }
+                reason |= {"verdict": "scored", "score": s.score, "quote": s.quote, "note": s.note}
                 if r.weight > 0:
                     total += r.weight * s.score
                     weight += r.weight
+            elif r.id in scores:
+                s = scores[r.id]
+                gap = "quote not found in the candidate's words"
+                reason |= {
+                    "quote": s.quote,
+                    "confidence": min(e.confidence, UNVERIFIED_CONFIDENCE),
+                    "note": f"scored {s.score:.2f} on a quote not found in the candidate's "
+                    f"words, so not counted; {s.note}".rstrip("; "),
+                }
+            else:
+                gap = "not answered" if e.value is None else "not scored"
+                reason["note"] = "; ".join(filter(None, [gap, e.note]))
+            if gap and r.weight > 0:
+                missing.append(f"{r.label} ({gap})")
             reasons.append(reason)
-        score = round(total / weight, 4) if weight else None
+        weighted = [r for r in soft if r.weight > 0]
+        if weighted and not weight and not missing:  # every one of them declined
+            missing = [f"{r.label} (declined)" for r in weighted]
+        score = round(total / weight, 4) if weight and not missing else None
         result = decide(list(hard.values()), score, pass_threshold)
+        if missing and "fail" not in hard.values():
+            result = "needs_review"
         labels = {r.id: r.label for r in requirements}
         summary = [f"Must-have not met: {labels[k]}" for k, v in hard.items() if v == "fail"]
         summary += [
             f"Must-have unconfirmed: {labels[k]}" for k, v in hard.items() if v == "unknown"
         ]
+        if missing:
+            summary.append(f"Not assessed: {', '.join(missing)}; a recruiter decides.")
         if score is not None:
             summary.append(f"Score {score:.2f} (pass mark {pass_threshold:.2f})")
         if end_reason != "completed":
@@ -325,8 +351,10 @@ def run_assessment(
             r["confidence"] < LOW_CONFIDENCE and r["verdict"] != "declined"
             for r in state["reasons"]
         )
-        challenge = state["result"] == "not_suitable" or (
-            weak and state["result"] != "needs_review"
+        challenge = (
+            state["result"] == "not_suitable"
+            or (weak and state["result"] != "needs_review")
+            or (auto_send and state["result"] == "suitable")
         )
         return "review" if challenge else "finalize"
 
