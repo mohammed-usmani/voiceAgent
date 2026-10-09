@@ -42,7 +42,8 @@ You are {name}, and you applied for the {title} role at {company}.
 Your résumé:
 {resume}
 How you behave: {behaviour}
-Your true answers, to give in your own words when asked (never read this list out):
+Your true answers, to give in your own words when asked (never read this list out).
+They win over your résumé and over anything the assistant suggests:
 {answers}
 Reply with only what you say next: one to three short spoken sentences, no stage
 directions. Once the assistant has said goodbye, reply with exactly {end}."""

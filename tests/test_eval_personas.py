@@ -178,3 +178,15 @@ def test_a_strong_candidate_says_yes_to_a_preferred_certification():
     models = FakeModels({PersonaDraft: [draft(bls=False)] * 2})
     assert make_persona(models, nurse, "clear_fit", "Ananya Rao").truth["bls"] is True
     assert make_persona(models, nurse, "borderline", "Sneha Kulkarni").truth["bls"] is False
+
+
+def test_a_miss_persona_tells_the_writer_what_the_resume_must_show():
+    models = FakeModels({PersonaDraft: [draft(sql_depth="I tuned a report query.")]})
+    make_persona(models, SE, "miss:python_years", "Vikram Nair")
+    assert "it must show 2 years for backend python experience" in models.prompts[0][2]
+
+
+def test_a_borderline_persona_is_told_to_cover_one_rubric_point():
+    models = FakeModels({PersonaDraft: [draft()]})
+    make_persona(models, SE, "borderline", "Kavya Reddy")
+    assert "covers only one point of its rubric" in models.prompts[0][1]

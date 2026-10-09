@@ -168,6 +168,11 @@ def _plan(job: RefJob, key: str) -> tuple[dict[str, Value], list[str], str, str]
         r = next(r for r in hard if r.id == target)
         truth[r.id] = rule_value(r, "fail")
         behaviour += f" Be honest about {r.label.lower()}."
+        # The writer once gave a 1-year candidate "3 years of SQL" anyway.
+        resume_note += (
+            f"; it must show {json.dumps(truth[r.id])} {r.unit or ''} for {r.label.lower()}, "
+            "which doesn't meet the job's requirement"
+        )
     elif kind == "borderline":
         behaviour = (
             "You are cooperative but your answers are average and a little hesitant, "
@@ -223,7 +228,9 @@ screening. Write their résumé and how they would answer the job's weighted req
   false, one of its options, or for text what they would say in one or two sentences.
 - Answer quality: {quality}"""
 QUALITY = {
-    "borderline": "middling - each answer only partly meets its rubric",
+    # "Only partly meets its rubric" still got rubric-complete answers.
+    "borderline": "middling - each text answer covers only one point of its rubric, in "
+    "general terms, with no example, numbers or outcome: one short sentence",
 }
 
 
