@@ -1,7 +1,7 @@
 from sqlalchemy import select, update
 
 from tests.fakes import FakeModels
-from tests.seed import seed_finished_call
+from tests.seed import TRANSCRIPT, seed_finished_call
 from voiceagent.agents.assessment import Evidence, EvidenceSet, Review, SoftScore, SoftScores
 from voiceagent.agents.messages import Flag, InviteCheck, Letter, RejectionCheck
 from voiceagent.db.base import make_sessionmaker
@@ -21,6 +21,8 @@ from voiceagent.worker.queue import enqueue
 PY = "I have been writing Python for about five years now."
 PUNE = "Yes, Pune three days a week works for me."
 SALARY = "I am expecting around 30 lakhs per annum."
+TWO = "Honestly only about two years, mostly scripting."
+TWO_CALL = [*TRANSCRIPT[:3], {"role": "candidate", "text": TWO}, *TRANSCRIPT[4:]]
 INVITE = Letter(
     subject="Next steps at Acme",
     body="Hi Priya, we'd like to move forward. The team will be in touch to schedule.",
@@ -29,11 +31,12 @@ REJECTION = Letter(subject="Your application to Acme", body="Hi Priya, thank you
 
 
 def replies(python=5.0, salary_score=0.8, letter=INVITE, check=None):
+    py = PY if python == 5.0 else TWO
     return {
         EvidenceSet: [
             EvidenceSet(
                 answers=[
-                    Evidence(requirement_id="python_years", value=python, quote=PY, confidence=0.9),
+                    Evidence(requirement_id="python_years", value=python, quote=py, confidence=0.9),
                     Evidence(requirement_id="onsite_pune", value=True, quote=PUNE, confidence=0.9),
                     Evidence(
                         requirement_id="expected_salary", value=30, quote=SALARY, confidence=0.9
@@ -142,7 +145,7 @@ def test_an_invite_the_checker_never_passed_is_not_sent(engine, session, mailer)
 
 
 def test_a_rejection_is_drafted_and_waits_for_approval(engine, session, mailer):
-    postcall(session)
+    postcall(session, transcript=TWO_CALL)
     drain(engine, FakeModels(replies(python=2.0, letter=REJECTION)))
     session.expire_all()
     d = session.scalars(select(Decision)).one()
@@ -182,8 +185,8 @@ def test_declined_consent_is_not_assessed(engine, session):
 
 
 def test_a_hang_up_mid_call_needs_review(engine, session):
-    call = postcall(session, end_reason="candidate_hung_up")
-    drain(engine, FakeModels(replies(python=1.0)))
+    call = postcall(session, end_reason="candidate_hung_up", transcript=TWO_CALL)
+    drain(engine, FakeModels(replies(python=2.0)))
     session.expire_all()
     d = session.scalars(select(Decision)).one()
     assert d.result == "needs_review" and "ended early" in d.summary

@@ -4,11 +4,25 @@ import re
 from difflib import SequenceMatcher
 
 MIN_QUOTE_WORDS = 3  # shorter quotes ("age", "Python") match almost any job description
+_UNITS = "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen"
+_TEENS = "fifteen sixteen seventeen eighteen nineteen twenty"
+NUMBER_WORDS = {w: str(i) for i, w in enumerate(f"{_UNITS} {_TEENS}".split())} | {
+    w: str(10 * i)
+    for i, w in enumerate("thirty forty fifty sixty seventy eighty ninety".split(), 3)
+}
+_NUMBER = re.compile(r"\d+(\.\d+)?")
 
 
 def _words(s: str) -> list[str]:
-    """Lowercased words with punctuation stripped from their edges ("3+," → "3")."""
-    return [w for w in (re.sub(r"^\W+|\W+$", "", t) for t in s.lower().split()) if w]
+    """Lowercased words with punctuation stripped from their edges ("3+," → "3"), and
+    spelled-out numbers as digits ("five" → "5"), so a number is protected either way."""
+    words = (re.sub(r"^\W+|\W+$", "", t) for t in s.lower().split())
+    return [NUMBER_WORDS.get(w, w) for w in words if w]
+
+
+def numbers_in(text: str) -> list[float]:
+    """The numbers in `text`, spelled out or not ("five years, 18 months" → [5, 18])."""
+    return [float(w) for w in _words(text) if _NUMBER.fullmatch(w)]
 
 
 def verify_quote(
@@ -41,11 +55,15 @@ def verify_quote(
 
 
 def verify_answer(quote: str, transcript: list[dict]) -> bool:
-    """Whether `quote` is the candidate's own words in a call transcript — never the
-    agent's. Spoken answers are short ("Yes.", "Five years."), so one word is enough; a
-    quote under three words gets no drift allowance, so it must match exactly."""
-    said = "\n".join(t.get("text", "") for t in transcript if t.get("role") == "candidate")
-    return verify_quote(quote, said, min_words=1)
+    """Whether `quote` is the candidate's own words in one of their turns — never the
+    agent's, and never stitched across two answers. Spoken answers are short ("Yes.",
+    "Five years."), so one word is enough; a quote under three words gets no drift
+    allowance, so it must match exactly."""
+    return any(
+        verify_quote(quote, t.get("text", ""), min_words=1)
+        for t in transcript
+        if t.get("role") == "candidate"
+    )
 
 
 def untrusted(tag: str, text: str) -> str:

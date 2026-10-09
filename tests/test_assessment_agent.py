@@ -15,6 +15,8 @@ REQS = CRITERIA.requirements  # python_years (hard >= 3), onsite_pune (hard == t
 PY_QUOTE = "I have been writing Python for about five years now."
 PUNE_QUOTE = "Yes, Pune three days a week works for me."
 SALARY_QUOTE = "I am expecting around 30 lakhs per annum."
+TWO_QUOTE = "Honestly only about two years, mostly scripting."
+TWO_CALL = [*TRANSCRIPT[:3], {"role": "candidate", "text": TWO_QUOTE}, *TRANSCRIPT[4:]]
 
 
 def evidence(python=5.0, py_quote=PY_QUOTE, py_conf=0.9, salary=30.0, **salary_kw):
@@ -77,9 +79,10 @@ def test_failed_must_have_is_challenged_by_the_reviewer_model():
     reviewer = FakeModels({Review: [Review(agree=True, notes="2 years is clear")]})
     reviewer.name = "reviewer"
     models = FakeModels(
-        {EvidenceSet: [evidence(python=2.0)], SoftScores: [scores(0.9)]}, reviewer=reviewer
+        {EvidenceSet: [evidence(python=2.0, py_quote=TWO_QUOTE)], SoftScores: [scores(0.9)]},
+        reviewer=reviewer,
     )
-    a = assess(models)
+    a = assess(models, transcript=TWO_CALL)
     assert (a.result, a.hard_failures) == ("not_suitable", ["python_years"])
     assert a.agent_review == {
         "agree": True,
@@ -94,12 +97,12 @@ def test_failed_must_have_is_challenged_by_the_reviewer_model():
 def test_a_reviewer_who_disagrees_sends_it_to_a_human_never_to_suitable():
     models = FakeModels(
         {
-            EvidenceSet: [evidence(python=2.0)],
+            EvidenceSet: [evidence(python=2.0, py_quote=TWO_QUOTE)],
             SoftScores: [scores(0.9)],
             Review: [Review(agree=False, notes="he said 'two' but later 'five'")],
         }
     )
-    a = assess(models)
+    a = assess(models, transcript=TWO_CALL)
     assert a.result == "needs_review"
     assert a.agent_review["agree"] is False and a.agent_review["challenged"] == "not_suitable"
     assert "The reviewer disagreed: he said 'two' but later 'five'" in a.summary
@@ -190,8 +193,9 @@ def test_low_score_is_not_suitable():
 
 @pytest.mark.parametrize("end_reason", ["candidate_hung_up", "not_interested"])
 def test_an_unfinished_call_is_never_an_automatic_rejection(end_reason):
-    models = FakeModels({EvidenceSet: [evidence(python=1.0)], SoftScores: [scores(0.1)]})
-    a = assess(models, end_reason=end_reason)
+    ev = evidence(python=2.0, py_quote=TWO_QUOTE)
+    models = FakeModels({EvidenceSet: [ev], SoftScores: [scores(0.1)]})
+    a = assess(models, end_reason=end_reason, transcript=TWO_CALL)
     assert a.result == "needs_review"
     assert a.hard_failures == ["python_years"]  # the evidence is still shown
     assert a.summary.startswith(f"The call ended early ({end_reason})")
@@ -309,12 +313,12 @@ def test_an_unanswered_weighted_requirement_is_reviewed_not_passed():
 def test_a_hard_failure_still_rejects_when_soft_evidence_is_missing():
     models = FakeModels(
         {
-            EvidenceSet: [evidence(python=2.0)],
+            EvidenceSet: [evidence(python=2.0, py_quote=TWO_QUOTE)],
             SoftScores: [SoftScores(scores=[])],
             Review: [Review(agree=True, notes="")],
         }
     )
-    assert assess(models).result == "not_suitable"
+    assert assess(models, transcript=TWO_CALL).result == "not_suitable"
 
 
 def test_a_suitable_result_that_would_be_sent_unattended_is_reviewed():
@@ -328,3 +332,31 @@ def test_a_suitable_result_that_would_be_sent_unattended_is_reviewed():
     a = assess(models, auto_send=True)
     assert a.agent_review["challenged"] == "suitable"
     assert a.result == "needs_review"
+
+
+def test_a_number_that_is_not_in_its_quote_decides_nothing():
+    # A real quote ("about five years") with a wrong value (8) can't pass a must-have.
+    models = FakeModels(
+        {
+            EvidenceSet: [evidence(python=8.0)],
+            SoftScores: [scores(0.9)],
+            Review: [Review(agree=True, notes="")],
+        }
+    )
+    a = assess(models)
+    assert (a.reasons[0]["verdict"], a.reasons[0]["confidence"]) == ("unknown", 0.3)
+    assert "isn't in the quote" in a.answers[0].note
+
+
+def test_months_quoted_for_a_value_in_years_still_count():
+    transcript = [*TRANSCRIPT[:3], {"role": "candidate", "text": "About 18 months of Python."}]
+    transcript += TRANSCRIPT[4:]
+    models = FakeModels(
+        {
+            EvidenceSet: [evidence(python=1.5, py_quote="About 18 months of Python.")],
+            SoftScores: [scores(0.9)],
+            Review: [Review(agree=True, notes="")],
+        }
+    )
+    a = assess(models, transcript=transcript)
+    assert (a.reasons[0]["verdict"], a.result) == ("fail", "not_suitable")

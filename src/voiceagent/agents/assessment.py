@@ -23,7 +23,7 @@ from typing import Annotated, TypedDict
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 
-from voiceagent.agents.tools import verify_answer
+from voiceagent.agents.tools import numbers_in, verify_answer
 from voiceagent.criteria.schema import Requirement
 from voiceagent.llm import Models
 from voiceagent.rules import Verdict, apply_rule, decide
@@ -148,15 +148,34 @@ def _requirement_json(r: Requirement) -> dict:
     return {k: v for k, v in r.model_dump(mode="json").items() if k in keep and v is not None}
 
 
+def _number_in_quote(value: float, quote: str) -> bool:
+    # ponytail: only months → years is converted; other unit changes ("a year and a half")
+    # leave the answer unconfirmed, and a recruiter reads it.
+    return any(abs(n - value) < 1e-6 or abs(n / 12 - value) < 1e-6 for n in numbers_in(quote))
+
+
 def _checked(r: Requirement, e: Evidence | None, transcript: list[dict]) -> Evidence:
-    """The model's answer, kept only as confident as its quote is real."""
+    """The model's answer, kept only as confident as its quote is real and, for a number,
+    as the number is in the quote."""
     if e is None:
         return Evidence(requirement_id=r.id, confidence=0.0, note="no answer extracted")
     e = e.model_copy(update={"requirement_id": r.id})
+    problem = None
     if (e.value is not None or e.declined) and not verify_answer(e.quote, transcript):
-        note = "; ".join(filter(None, [e.note, "quote not found in the candidate's words"]))
+        problem = "quote not found in the candidate's words"
+    elif (
+        r.kind == "number"
+        and isinstance(e.value, int | float)
+        and not isinstance(e.value, bool)
+        and not _number_in_quote(e.value, e.quote)
+    ):
+        problem = f"the value {e.value:g} isn't in the quote"
+    if problem:
         e = e.model_copy(
-            update={"confidence": min(e.confidence, UNVERIFIED_CONFIDENCE), "note": note}
+            update={
+                "confidence": min(e.confidence, UNVERIFIED_CONFIDENCE),
+                "note": "; ".join(filter(None, [e.note, problem])),
+            }
         )
     return e
 

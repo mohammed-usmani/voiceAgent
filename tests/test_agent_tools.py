@@ -89,3 +89,19 @@ def test_a_short_quote_must_match_exactly():
 
 def test_job_description_quotes_still_need_three_words():
     assert not verify_quote("Python", "Python")
+
+
+def test_a_spelled_out_number_is_protected_like_a_digit():
+    said = "I have two years of Python, mostly scripting."
+    assert not verify_quote("I have five years of Python, mostly scripting.", said)
+    assert verify_quote("I have 2 years of Python, mostly scripting.", said)  # same number
+
+
+def test_a_quote_spanning_two_answers_is_not_the_candidates_words():
+    call = [
+        {"role": "candidate", "text": "I would love to work here."},
+        {"role": "agent", "text": "And how many years of Python?"},
+        {"role": "candidate", "text": "Ten years, give or take."},
+    ]
+    assert verify_answer("Ten years, give or take.", call)
+    assert not verify_answer("work here. Ten years, give or take.", call)
