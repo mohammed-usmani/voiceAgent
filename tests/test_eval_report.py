@@ -78,6 +78,14 @@ def test_the_previous_run_is_the_latest_readable_one_before_this(tmp_path):
     assert prev["name"] == "20261002T000000Z" and prev["summary"] == {"a": 2}
 
 
+def test_a_run_is_compared_only_with_one_of_the_same_config(tmp_path):
+    real = results()["config"] | {"offline": False}
+    save(tmp_path, "20261001T000000Z", json.dumps(results(config=real)))
+    save(tmp_path, "20261002T000000Z", json.dumps(results()))  # offline
+    save(tmp_path, "20261003T000000Z", json.dumps(results(config=real | {"personas": 9})))
+    assert previous_run(tmp_path, "20261005T000000Z", real)["name"] == "20261001T000000Z"
+
+
 def test_no_runs_directory_means_no_previous_run(tmp_path):
     assert previous_run(tmp_path / "missing", "20261005T000000Z") is None
     assert previous_run(tmp_path, "20261005T000000Z") is None
@@ -105,7 +113,7 @@ def test_the_report_has_every_section(tmp_path):
     write_run(tmp_path / r["name"], r)
     md = (tmp_path / r["name"] / "report.md").read_text()
     assert json.loads((tmp_path / r["name"] / "results.json").read_text())["name"] == r["name"]
-    assert "Compared with 20261008T000000Z." in md
+    assert "Compared with 20261008T000000Z, the last run with the same jobs" in md
     assert "| decision.accuracy | 0.750 | 0.500 | +0.250 |" in md
     assert "| software-engineer | 1.000 | 0.800 |" in md and "team_size" in md
     assert "staff-nurse | error: StructuredOutputError" in md
@@ -122,7 +130,7 @@ def test_the_report_has_every_section(tmp_path):
 
 def test_a_first_or_aborted_run_says_so():
     md = render_markdown(results(aborted="spent $2.0100 of a $2.00 budget"))
-    assert "No previous run to compare with." in md
+    assert "No previous run with the same jobs, personas, runs and models" in md
     assert "**Stopped early:** spent $2.0100 of a $2.00 budget." in md
 
 

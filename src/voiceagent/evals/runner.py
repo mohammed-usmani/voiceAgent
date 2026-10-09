@@ -327,18 +327,19 @@ async def run_eval(cfg: EvalConfig, backend: Backend, meter: Meter) -> dict:
         aborted = str(e)
     by_slug = {j.slug: j for j in jobs}
     summary = summarize(criteria_rows, records, by_slug, meter.usd)
-    prev = previous_run(cfg.out, name) if cfg.compare else None
+    config = {
+        "jobs": [j.slug for j in jobs],
+        "personas": cfg.personas,
+        "runs": cfg.runs,
+        "budget_usd": cfg.budget_usd,
+        "offline": cfg.offline,
+    }
+    prev = previous_run(cfg.out, name, config) if cfg.compare else None
     results = {
         "name": name,
         "started_at": started.isoformat(),
         "finished_at": datetime.now(UTC).isoformat(),
-        "config": {
-            "jobs": [j.slug for j in jobs],
-            "personas": cfg.personas,
-            "runs": cfg.runs,
-            "budget_usd": cfg.budget_usd,
-            "offline": cfg.offline,
-        },
+        "config": config,
         "aborted": aborted,
         "summary": summary,
         "criteria": criteria_rows,

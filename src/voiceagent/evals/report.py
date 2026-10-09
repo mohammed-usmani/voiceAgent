@@ -6,6 +6,8 @@ from datetime import datetime
 from pathlib import Path
 
 RUNS_DIR = Path("evals/runs")
+# A run is compared only with one of the same shape: offline numbers say nothing of a real run.
+SAME = ("offline", "jobs", "personas", "runs")
 FAIRNESS = {True: "pass", False: "FAIL", None: "incomplete"}
 
 
@@ -13,8 +15,9 @@ def run_name(at: datetime) -> str:
     return at.strftime("%Y%m%dT%H%M%SZ")
 
 
-def previous_run(out: Path, current: str) -> dict | None:
-    """The latest run before `current` whose results.json can be read."""
+def previous_run(out: Path, current: str, config: dict | None = None) -> dict | None:
+    """The latest run before `current` whose results.json can be read and, given `config`,
+    that ran with the same SAME settings."""
     if not out.is_dir():
         return None
     for d in sorted((p for p in out.iterdir() if p.is_dir()), reverse=True):
@@ -24,7 +27,10 @@ def previous_run(out: Path, current: str) -> dict | None:
             results = json.loads((d / "results.json").read_text())
         except (OSError, ValueError):
             continue  # an aborted write or a hand-edited file: look further back
-        if isinstance(results, dict) and isinstance(results.get("summary"), dict):
+        if not isinstance(results, dict) or not isinstance(results.get("summary"), dict):
+            continue
+        theirs = results.get("config") or {}
+        if config is None or all(theirs.get(k) == config.get(k) for k in SAME):
             return results | {"name": d.name}
     return None
 
@@ -83,7 +89,11 @@ def render_markdown(results: dict) -> str:
     ]
     cmp = results["comparison"]
     if cmp["previous"]:
-        out += [f"Compared with {cmp['previous']}.", ""]
+        out += [
+            f"Compared with {cmp['previous']}, the last run with the same jobs, personas, "
+            "runs and models (real or offline).",
+            "",
+        ]
         out += _table(
             ["Metric", "This run", "Previous", "Change"],
             [
@@ -97,7 +107,10 @@ def render_markdown(results: dict) -> str:
             ],
         )
     else:
-        out += ["No previous run to compare with.", ""]
+        out += [
+            "No previous run with the same jobs, personas, runs and models to compare with.",
+            "",
+        ]
         out += _table(["Metric", "This run"], [[k, v] for k, v in results["summary"].items()])
     out += ["## Criteria generation", ""]
     out += _table(
