@@ -1,13 +1,14 @@
-def test_llm_does_not_think_before_speaking(monkeypatch):
-    # Thinking tokens arrive before the first spoken word; with it on, replies start ~1 s later.
-    monkeypatch.setenv("GROQ_API_KEY", "test")
-    monkeypatch.setenv("LIVEKIT_API_KEY", "test")
-    monkeypatch.setenv("LIVEKIT_API_SECRET", "test-secret-long-enough-for-hs256-signing")
+def test_voice_models_run_on_together_without_thinking(monkeypatch):
+    # Reasoning tokens arrive before the first spoken word. With reasoning off, Qwen3.5-9B
+    # on Together answered the screening prompt in 0.64 s median (0.74 s worst).
+    monkeypatch.setenv("TOGETHER_API_KEY", "test")
     from voiceagent.replies import backup_llm, main_llm
 
-    assert main_llm().model == "google/gemini-2.5-flash"
-    assert main_llm()._opts.extra_kwargs == {"reasoning_effort": "none"}
-    assert backup_llm()._opts.reasoning_effort == "low"
+    main, backup = main_llm(), backup_llm()
+    assert (main.model, backup.model) == ("Qwen/Qwen3.5-9B", "MiniMaxAI/MiniMax-M3")
+    for m in (main, backup):
+        assert m._opts.extra_body == {"reasoning": {"enabled": False}}
+        assert str(m._client.base_url).startswith("https://api.together.xyz/v1")
 
 
 def test_back_to_back_caller_messages_are_merged():

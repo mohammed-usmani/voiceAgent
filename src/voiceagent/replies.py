@@ -2,24 +2,41 @@
 for bad replies, and one log line per reply stage."""
 
 import logging
+import os
 
-from livekit.agents import Agent, AgentSession, inference, llm
-from livekit.plugins import groq
+from livekit.agents import Agent, AgentSession, llm
+from livekit.plugins import openai
 
 logger = logging.getLogger("voiceagent")
 
 
-def main_llm() -> inference.LLM:
-    # Replayed on a real call's history, first spoken token from India: Gemini 2.5 Flash
-    # ~1.1 s (thinks by default), with thinking off ~0.5 s. Qwen3.8-27B on Groq was
-    # ~0.16 s but its replies came back empty or cut off mid-sentence (19/20 on a long
-    # answer).
-    return inference.LLM(model="google/gemini-2.5-flash", extra_kwargs={"reasoning_effort": "none"})
+TOGETHER_BASE_URL = "https://api.together.xyz/v1"
+# Together's switch for reasoning models: thinking tokens arrive before the first spoken
+# word, so with reasoning on every reply starts later.
+NO_REASONING = {"reasoning": {"enabled": False}}
 
 
-def backup_llm() -> groq.LLM:
-    # A different provider, so one provider's outage doesn't silence the agent.
-    return groq.LLM(model="openai/gpt-oss-20b", reasoning_effort="low")
+def _together(model: str) -> openai.LLM:
+    return openai.LLM(
+        model=model,
+        base_url=TOGETHER_BASE_URL,
+        api_key=os.environ.get("TOGETHER_API_KEY", ""),
+        extra_body=NO_REASONING,
+    )
+
+
+def main_llm() -> openai.LLM:
+    # Streamed on the real screening prompt from India, reasoning off (9 Together models,
+    # 5 runs each): Qwen3.5-9B was fastest and steadiest, 0.64 s median to the first token,
+    # 0.74 s worst, no empty replies. (Earlier: Gemini 2.5 Flash ~0.5 s with thinking off;
+    # Qwen3.8-27B on Groq returned empty or cut-off replies.)
+    return _together("Qwen/Qwen3.5-9B")
+
+
+def backup_llm() -> openai.LLM:
+    # A different model family, so a bad reply from one isn't repeated by the other:
+    # MiniMax-M3 answered in 0.77 s median with no empty replies.
+    return _together("MiniMaxAI/MiniMax-M3")
 
 
 def clean_history(chat_ctx: llm.ChatContext) -> llm.ChatContext:
