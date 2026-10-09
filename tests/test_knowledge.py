@@ -1,6 +1,8 @@
+from sqlalchemy import select
+
 from tests.fakes import FakeModels
 from voiceagent.criteria.schema import Criteria, JobFacts, Requirement, Rule
-from voiceagent.db.models import Job
+from voiceagent.db.models import Job, Knowledge
 from voiceagent.knowledge.store import (
     add_knowledge,
     index_criteria,
@@ -14,6 +16,15 @@ def make_job(session, title):
     session.add(job)
     session.flush()
     return job
+
+
+def criteria_with(req_id):
+    return Criteria(
+        job_facts=JobFacts(summary="APIs"),
+        requirements=[
+            Requirement(id=req_id, label=req_id, kind="boolean", question="?", weight=1, source="x")
+        ],
+    )
 
 
 def test_search_ranks_by_similarity_and_filters_kind(session):
@@ -78,3 +89,19 @@ def test_index_and_describe_similar_criteria(session):
         "Backend Engineer: Notice period (must-have: <= 30 days) — asked as: "
         "What's your notice period?"
     ]
+
+
+def test_reindexing_a_job_replaces_its_criteria(session):
+    models = FakeModels()
+    job, other = make_job(session, "Backend Engineer"), make_job(session, "Data Engineer")
+    add_knowledge(session, models, "criteria", [(other.id, "other job", {})])
+    add_knowledge(session, models, "override", [(job.id, "an override", {})])
+    index_criteria(session, models, job, criteria_with("notice_days"))
+    index_criteria(session, models, job, criteria_with("python_years"))
+    session.commit()
+    rows = {(k.kind, k.job_id, k.data.get("id")) for k in session.scalars(select(Knowledge))}
+    assert rows == {
+        ("criteria", other.id, None),
+        ("override", job.id, None),
+        ("criteria", job.id, "python_years"),
+    }

@@ -6,7 +6,7 @@ from voiceagent.agents.criteria import (
     Issue,
     run_criteria_agent,
 )
-from voiceagent.criteria.schema import Criteria, JobFacts, Requirement, Rule
+from voiceagent.criteria.schema import MAX_ASKED, Criteria, JobFacts, Requirement, Rule
 
 JD = (
     "Backend Engineer (Python), Pune. You will build APIs with FastAPI and PostgreSQL. "
@@ -155,3 +155,56 @@ def test_heartbeat_runs_before_every_step():
         heartbeat=lambda: beats.append(len(models.prompts)),
     )
     assert beats == [0, 0, 1, 2]  # retrieve, draft, critique, finalize
+
+
+def test_invalid_rule_is_tied_to_its_requirement_and_left_to_the_api():
+    no_rule = PYTHON.model_copy(update={"rule": None})
+    models = FakeModels({Draft: [draft(no_rule)], Critique: [Critique()]})
+    result = run(models)
+    revision_prompt = [u for name, _, u in models.prompts if name == "Draft"][1]
+    assert "[invalid] python_years: a hard requirement needs a rule" in revision_prompt
+    assert not any("needs a rule" in w for w in result.warnings)  # the API reports it
+
+
+def test_repeated_issues_give_one_warning_and_one_removal():
+    units = Issue(requirement_id="notice_days", kind="units", detail="days or weeks?")
+    illegal = Issue(requirement_id="age", kind="illegal", detail="screens on age")
+    models = FakeModels(
+        {
+            Draft: [draft(PYTHON, NOTICE, INVENTED)],  # INVENTED is also ungrounded
+            Critique: [Critique(issues=[units, units.model_copy(), illegal])],
+        }
+    )
+    result = run(models)
+    assert sum("notice_days" in w for w in result.warnings) == 1
+    assert sum(w.startswith("age: removed") for w in result.warnings) == 1
+
+
+def test_critic_question_count_is_ignored():
+    too_many = Issue(kind="too_many", detail="too many questions")
+    models = FakeModels({Draft: [draft(PYTHON)], Critique: [Critique(issues=[too_many])]})
+    result = run(models)
+    assert result.rounds == 1
+    assert result.warnings == []
+
+
+def test_too_many_questions_are_sent_back_once_and_warned_once():
+    many = [NOTICE.model_copy(update={"id": f"q{i}"}) for i in range(MAX_ASKED + 1)]
+    models = FakeModels({Draft: [draft(*many)], Critique: [Critique()]})
+    result = run(models)
+    revision_prompt = [u for name, _, u in models.prompts if name == "Draft"][1]
+    assert "[too_many]" in revision_prompt
+    assert [w for w in result.warnings if "questions" in w] == [
+        f"{MAX_ASKED + 1} questions; calls stay short with at most {MAX_ASKED}"
+    ]
+
+
+def test_failed_retrieval_does_not_stop_generation():
+    def down(query):
+        raise RuntimeError("embeddings down")
+
+    models = FakeModels({Draft: [draft(PYTHON)], Critique: [Critique()]})
+    result = run_criteria_agent(
+        models, title="Backend Engineer", description=JD, notes="", similar_lookup=down
+    )
+    assert [r.id for r in result.criteria.requirements] == ["python_years"]

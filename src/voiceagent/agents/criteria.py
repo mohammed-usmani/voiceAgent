@@ -11,6 +11,7 @@ other unresolved issues into warnings for the recruiter.
 """
 
 import json
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal, TypedDict
@@ -19,9 +20,16 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 
 from voiceagent.agents.tools import verify_quote
-from voiceagent.criteria.schema import MAX_ASKED, Criteria, check_criteria, normalize_weights
+from voiceagent.criteria.schema import (
+    MAX_ASKED,
+    Criteria,
+    check_criteria,
+    normalize_weights,
+    requirement_errors,
+)
 from voiceagent.llm import Models
 
+logger = logging.getLogger(__name__)
 MAX_ROUNDS = 3
 PROTECTED = (
     "age, gender, religion, caste, marital status, pregnancy, disability, health, "
@@ -110,7 +118,6 @@ problems, each tied to a requirement id when it applies:
   skills"); suggest an askable question instead
 - contradiction: conflicts with the job description, the notes or another requirement
 - units: wrong or missing unit, or a threshold in a different unit than the question asks
-- too_many: more than {MAX_ASKED} requirements
 - other: a hard rule stricter or looser than the text says, a leading question, or a
   must-have the job description states that is missing
 Return no issues if the criteria are sound."""
@@ -145,7 +152,12 @@ def run_criteria_agent(
 
     def retrieve(state: State) -> State:
         query = f"{state['title']}\n{state['description'][:1500]}"
-        return {"similar": similar_lookup(query), "round": 0, "issues": []}
+        try:
+            similar = similar_lookup(query)
+        except Exception:  # retrieval only feeds suggestions; draft without it
+            logger.exception("similar criteria lookup failed")
+            similar = []
+        return {"similar": similar, "round": 0, "issues": []}
 
     def draft(state: State) -> State:
         parts = [_job_block(state)]
@@ -177,16 +189,27 @@ def run_criteria_agent(
             for r in d.criteria.requirements
             if not verify_quote(r.source, source)
         ]
-        errors, _ = check_criteria(d.criteria)
         issues += [
-            Issue(kind="invalid", detail=e, fix="make the rule fit the answer type") for e in errors
+            Issue(requirement_id=rid, kind="invalid", detail=e, fix="make it fit the answer type")
+            for rid, e in requirement_errors(d.criteria)
         ]
+        if len(d.criteria.requirements) > MAX_ASKED:
+            issues.append(
+                Issue(
+                    kind="too_many",
+                    detail=f"{len(d.criteria.requirements)} requirements",
+                    fix=f"keep the {MAX_ASKED} most decisive",
+                )
+            )
         user = (
             _job_block(state)
             + "\n\nCriteria to review:\n"
             + json.dumps(d.criteria.model_dump(mode="json"), indent=1)
         )
-        issues += models.structured(Critique, CRITIC, user).issues
+        # The code counts the questions itself (above); ignore the critic's count.
+        issues += [
+            i for i in models.structured(Critique, CRITIC, user).issues if i.kind != "too_many"
+        ]
         return {"issues": issues}
 
     def route(state: State) -> str:
@@ -201,16 +224,19 @@ def run_criteria_agent(
         }
         kept = [r for r in d.criteria.requirements if r.id not in blocking]
         criteria = normalize_weights(d.criteria.model_copy(update={"requirements": kept}))
-        warnings = [
-            f"{rid}: removed ({i.kind}: {i.detail})"
-            for i in state["issues"]
-            if (rid := i.requirement_id) in blocking
-        ]
-        warnings += [
-            f"{i.requirement_id or 'overall'}: {i.detail}"
-            for i in state["issues"]
-            if i.requirement_id not in blocking
-        ]
+        # One line per requirement and kind. Rule errors and the question count are left out:
+        # the API reports the former as errors, and check_criteria warns about the latter.
+        warnings, seen = [], set()
+        for i in state["issues"]:
+            rid = i.requirement_id
+            key = (rid, "removed") if rid in blocking else (rid, i.kind)
+            if i.kind in ("invalid", "too_many") or key in seen:
+                continue
+            seen.add(key)
+            if rid in blocking:
+                warnings.append(f"{rid}: removed ({i.kind}: {i.detail})")
+            else:
+                warnings.append(f"{rid or 'overall'}: {i.detail}")
         warnings += check_criteria(criteria)[1]
         warnings += [f"Similar roles also screened for: {s}" for s in d.suggestions]
         if not kept:

@@ -1,5 +1,8 @@
+from alembic import command
+from alembic.config import Config
 from sqlalchemy import text
 
+from tests.conftest import TEST_URL
 from voiceagent.db.models import Job
 
 
@@ -19,3 +22,9 @@ def test_job_defaults(session):
     assert job.agent_name == "Aria"
     assert job.calling_hours == {"start": "10:00", "end": "19:00"}
     assert job.created_at is not None
+
+
+def test_models_match_the_migrations(engine):
+    cfg = Config("alembic.ini")
+    cfg.set_main_option("sqlalchemy.url", TEST_URL)
+    command.check(cfg)  # raises if autogenerate would emit any operation

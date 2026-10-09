@@ -75,32 +75,42 @@ def _rule_fits(r: Requirement) -> bool:
     )
 
 
-def check_criteria(c: Criteria) -> tuple[list[str], list[str]]:
-    """Return (errors, warnings). Errors block approval; warnings are shown to the recruiter."""
-    errors: list[str] = []
-    warnings: list[str] = []
+def requirement_errors(c: Criteria) -> list[tuple[str, str]]:
+    """(requirement id, problem) for every rule that blocks approval."""
+    errors: list[tuple[str, str]] = []
     seen: set[str] = set()
     for r in c.requirements:
         if r.id in seen:
-            errors.append(f"{r.id}: duplicate id")
+            errors.append((r.id, "duplicate id"))
         seen.add(r.id)
         if r.kind == "choice" and not r.options:
-            errors.append(f"{r.id}: a choice answer needs options")
+            errors.append((r.id, "a choice answer needs options"))
         if r.hard:
             if r.rule is None:
-                errors.append(f"{r.id}: a hard requirement needs a rule")
+                errors.append((r.id, "a hard requirement needs a rule"))
             elif r.rule.op not in OPS_BY_KIND[r.kind]:
-                errors.append(f"{r.id}: '{r.rule.op}' doesn't fit a {r.kind} answer")
+                errors.append((r.id, f"'{r.rule.op}' doesn't fit a {r.kind} answer"))
             elif not _rule_fits(r):
                 errors.append(
-                    f"{r.id}: rule value {r.rule.value!r} doesn't fit '{r.rule.op}' "
-                    f"on a {r.kind} answer"
+                    (
+                        r.id,
+                        f"rule value {r.rule.value!r} doesn't fit '{r.rule.op}' "
+                        f"on a {r.kind} answer",
+                    )
                 )
-        else:
-            if r.kind == "text" and not r.rubric:
-                errors.append(f"{r.id}: a text requirement needs a rubric")
-            if r.weight == 0:
-                warnings.append(f"{r.id}: weight 0, so it won't affect the score")
+        elif r.kind == "text" and not r.rubric:
+            errors.append((r.id, "a text requirement needs a rubric"))
+    return errors
+
+
+def check_criteria(c: Criteria) -> tuple[list[str], list[str]]:
+    """Return (errors, warnings). Errors block approval; warnings are shown to the recruiter."""
+    errors = [f"{rid}: {problem}" for rid, problem in requirement_errors(c)]
+    warnings = [
+        f"{r.id}: weight 0, so it won't affect the score"
+        for r in c.requirements
+        if not r.hard and r.weight == 0
+    ]
     if len(c.requirements) > MAX_ASKED:
         warnings.append(
             f"{len(c.requirements)} questions; calls stay short with at most {MAX_ASKED}"

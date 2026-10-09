@@ -3,7 +3,7 @@ recruiter overrides) that ground and calibrate the agents."""
 
 import uuid
 
-from sqlalchemy import or_, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from voiceagent.criteria.schema import Criteria
@@ -41,7 +41,11 @@ def search_knowledge(
 
 
 def index_criteria(session: Session, models: Models, job: Job, criteria: Criteria) -> None:
-    """One entry per requirement, so retrieval finds individual checks of similar roles."""
+    """One entry per requirement, so retrieval finds individual checks of similar roles.
+    Replaces the job's earlier entries, so only its approved criteria are retrievable."""
+    session.execute(
+        delete(Knowledge).where(Knowledge.kind == "criteria", Knowledge.job_id == job.id)
+    )
     entries = [
         (
             job.id,
