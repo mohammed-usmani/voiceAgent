@@ -22,6 +22,7 @@ def make_agent(model: llm.LLM, **kw) -> ScreeningAgent:
         greeting=greeting(JOB, CANDIDATE),
         timezone=JOB.timezone,
         backup=kw.pop("backup", model),
+        clock=lambda: NOW,
         **kw,
     )
 
@@ -118,6 +119,35 @@ async def test_unknown_reason_is_rejected_and_a_bare_tool_call_skips_the_backup(
     assert result.outcome is None
     assert backup.requests == []
     assert texts(result)[-1] == "Sorry, where were we?"
+
+
+@pytest.mark.parametrize(
+    ("callback_at", "complaint"),
+    [
+        ("2026-10-09T10:00", "already passed"),  # this morning
+        ("2027-01-15T10:00", "60 days"),
+        ("2026-10-10", "time of day"),
+    ],
+)
+async def test_callback_time_must_be_soon_and_in_the_future(callback_at, complaint):
+    # M7: the model retries with a sane time instead of saving a past or far-off one.
+    model = ScriptedLLM(
+        [
+            ["Sure.", tool_call("end_call", reason="callback_requested", callback_at=callback_at)],
+            ["Okay, bye!", tool_call("end_call", reason="callback_requested", callback_at=GOOD)],
+        ]
+    )
+    result = await run_text_call(make_agent(model), model, ["Call me later."])
+    assert result.outcome.callback_at == datetime.fromisoformat(GOOD).replace(
+        tzinfo=ZoneInfo("Asia/Kolkata")
+    )
+    errors = [
+        e.item.output for e in result.events if e.type == "function_call_output" and e.item.is_error
+    ]
+    assert len(errors) == 1 and complaint in errors[0]
+
+
+GOOD = "2026-10-10T17:00"
 
 
 def test_transcript_keeps_spoken_messages_only():

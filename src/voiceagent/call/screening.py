@@ -4,7 +4,7 @@ conversation its prompt describes, with one tool, end_call."""
 import json
 import uuid
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Literal
 from zoneinfo import ZoneInfo
 
@@ -12,6 +12,9 @@ from livekit.agents import RunContext, ToolError, function_tool, llm
 
 from voiceagent.call.store import CallOutcome
 from voiceagent.replies import ReliableAgent
+
+# A callback further out than this is more likely a misheard date than a plan.
+MAX_CALLBACK_DAYS = 60
 
 EndReason = Literal["completed", "declined_consent", "callback_requested", "not_interested"]
 
@@ -49,6 +52,7 @@ class ScreeningAgent(ReliableAgent):
         timezone: str,
         hang_up: Callable[[], object] | None = None,
         backup: llm.LLM | None = None,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         super().__init__(instructions=instructions, backup=backup)
         self.greeting = greeting
@@ -56,6 +60,7 @@ class ScreeningAgent(ReliableAgent):
         self.error: str | None = None  # why the session failed, if it did (agent.py)
         self._tz = ZoneInfo(timezone)
         self._hang_up = hang_up
+        self._clock = clock
 
     async def on_enter(self) -> None:
         # Fixed text, so no LLM: the AI and recording disclosure is said word for word on
@@ -79,16 +84,7 @@ class ScreeningAgent(ReliableAgent):
             callback_at: Only with callback_requested: the local date and time to call
                 back, like 2026-10-10T17:00.
         """
-        when = None
-        if reason == "callback_requested":
-            try:
-                when = datetime.fromisoformat(callback_at or "")
-            except ValueError:
-                raise ToolError(
-                    "callback_at must be the local date and time they gave, like 2026-10-10T17:00"
-                ) from None
-            if when.tzinfo is None:
-                when = when.replace(tzinfo=self._tz)
+        when = self._callback_time(callback_at) if reason == "callback_requested" else None
         if self.outcome is None:  # the first decision stands
             self.outcome = CallOutcome(reason, when)
         if self._hang_up is not None:
@@ -96,3 +92,31 @@ class ScreeningAgent(ReliableAgent):
             # EndCallTool does. Returning None asks the model for no further reply.
             hang_up = self._hang_up
             ctx.speech_handle.add_done_callback(lambda _handle: hang_up())
+
+    def _callback_time(self, callback_at: str | None) -> datetime:
+        """The callback time the model gave, or a ToolError it can correct and retry."""
+        text = (callback_at or "").strip()
+        try:
+            date.fromisoformat(text)
+        except ValueError:
+            pass
+        else:  # a date alone would be midnight
+            raise ToolError(
+                "callback_at needs a time of day too: ask them what time suits them on that day"
+            )
+        try:
+            when = datetime.fromisoformat(text)
+        except ValueError:
+            raise ToolError(
+                "callback_at must be the local date and time they gave, like 2026-10-10T17:00"
+            ) from None
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=self._tz)
+        now = self._clock()
+        if when <= now:
+            raise ToolError("that callback time has already passed: confirm the date and time")
+        if when > now + timedelta(days=MAX_CALLBACK_DAYS):
+            raise ToolError(
+                f"a callback must be within {MAX_CALLBACK_DAYS} days: confirm the date with them"
+            )
+        return when
