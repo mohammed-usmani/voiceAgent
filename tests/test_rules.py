@@ -104,3 +104,23 @@ def test_a_requirement_without_a_rule_or_a_text_answer_is_unknown():
 )
 def test_decide(hard, score, result):
     assert decide(hard, score, 0.6) == result
+
+
+MODES = ["On-site", "Hybrid", "Remote"]
+
+
+@pytest.mark.parametrize(
+    ("value", "verdict"),
+    [
+        ("Onsite", "pass"),
+        ("on site", "pass"),
+        ("ON-SITE.", "pass"),
+        ("  hybrid ", "pass"),
+        ("remote", "fail"),
+        ("Fully remote", "unknown"),  # not one of the options: a human reads it
+        ("Office", "unknown"),
+    ],
+)
+def test_a_choice_outside_the_options_is_unknown_never_fail(value, verdict):
+    r = req("choice", "in", ["On-site", "Hybrid"], options=MODES)
+    assert apply_rule(r, value) == verdict

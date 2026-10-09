@@ -36,14 +36,16 @@ def _as_bool(value) -> bool | None:
 
 
 def _norm(value) -> str | None:
-    return value.strip().casefold() if isinstance(value, str) else None
+    """Case, spacing, hyphens and punctuation don't matter: "On-site" is "onsite"."""
+    return re.sub(r"[\W_]+", "", value.casefold()) if isinstance(value, str) else None
 
 
 def apply_rule(req: Requirement, value, *, declined: bool = False) -> Verdict:
     """Evaluate a hard requirement's rule on an extracted answer, in the requirement's unit.
 
     Anything that can't be read — no answer, a declined answer, a value of the wrong type,
-    a malformed rule — is "unknown", never "fail": only a human rejects on a guess.
+    a choice that isn't one of the options, a malformed rule — is "unknown", never "fail":
+    only a human rejects on a guess.
     """
     rule = req.rule
     if declined or value is None or rule is None:
@@ -80,7 +82,8 @@ def apply_rule(req: Requirement, value, *, declined: bool = False) -> Verdict:
         ok = b == t
     elif req.kind == "choice":
         v = _norm(value)
-        if v is None:
+        # Not one of the options (a misspelt or paraphrased answer): only a human can tell.
+        if v is None or v not in {_norm(o) for o in req.options or []}:
             return "unknown"
         if op == "==" and isinstance(target, str):
             ok = v == _norm(target)
