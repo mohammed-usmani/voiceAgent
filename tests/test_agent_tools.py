@@ -1,3 +1,5 @@
+import pytest
+
 from voiceagent.agents.tools import verify_quote
 
 JD = """Requirements:
@@ -21,3 +23,40 @@ def test_invented_quote_does_not_match():
 
 def test_empty_quote_does_not_match():
     assert not verify_quote("   ", JD)
+
+
+# Two wordings of one job description, so a quote check that only samples some
+# alignments of the text misses the match in at least one of them.
+REQS = (
+    "Requirements: at least 3 years of Python experience, solid SQL, and AWS. "
+    "Salary up to 18 LPA. Notice period of 30 days or less."
+)
+JDS = [
+    "We are hiring a Backend Engineer to manage our UPI payments platform. " + REQS,
+    "We are hiring a Backend Engineer in Pune to manage our payments platform. " + REQS,
+]
+
+
+@pytest.mark.parametrize("jd", JDS, ids=["upi", "pune"])
+def test_trailing_punctuation_matches(jd):
+    assert verify_quote("at least 3 years of Python experience.", jd)
+    assert verify_quote('"Salary up to 18 LPA."', jd)
+
+
+@pytest.mark.parametrize("jd", JDS, ids=["upi", "pune"])
+def test_one_dropped_word_matches(jd):
+    assert verify_quote("at least 3 years Python experience", jd)
+
+
+@pytest.mark.parametrize("jd", JDS, ids=["upi", "pune"])
+def test_changed_number_does_not_match(jd):
+    assert not verify_quote("at least 5 years of Python experience", jd)
+    assert not verify_quote("Salary up to 28 LPA", jd)
+    assert not verify_quote("Notice period of 60 days or less", jd)
+
+
+@pytest.mark.parametrize("jd", JDS, ids=["upi", "pune"])
+def test_short_or_partial_word_quotes_do_not_ground(jd):
+    assert not verify_quote("age", jd)  # inside "manage"
+    assert not verify_quote("Python", jd)
+    assert not verify_quote("solid SQL", jd)
