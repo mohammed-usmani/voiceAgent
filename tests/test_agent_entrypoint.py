@@ -1,0 +1,222 @@
+"""agent.entrypoint with fakes for the job, the session and the database: which agent a
+dispatch gets, what is said, and what is saved when the call ends."""
+
+import json
+import uuid
+from types import SimpleNamespace
+
+import pytest
+from livekit.agents import llm
+from livekit.agents.voice.events import CloseReason
+
+from tests.seed import CRITERIA, sample_candidate, sample_job
+from voiceagent import agent as agent_module
+from voiceagent import replies
+from voiceagent.call.prompt import APOLOGY
+from voiceagent.call.screening import ScreeningAgent
+from voiceagent.call.store import CallOutcome, LoadedCall
+
+CALL_ID = uuid.uuid4()
+
+
+class FakeSession:
+    def __init__(self, log: list, start_error: Exception | None = None) -> None:
+        self.log = log
+        self.start_error = start_error
+        self.handlers: dict = {}
+        self.history = llm.ChatContext()
+        self.agent = None
+
+    def on(self, event, callback=None):
+        if callback is None:  # used as a decorator
+            return lambda f: self.handlers.setdefault(event, f)
+        self.handlers[event] = callback
+
+    async def start(self, agent, room, room_options):
+        self.agent = agent
+        self.log.append(("start", type(agent).__name__))
+        if self.start_error:
+            raise self.start_error
+
+    def say(self, text, *, allow_interruptions=True):
+        self.log.append(("say", text, allow_interruptions))
+
+        async def spoken():
+            return None
+
+        return spoken()
+
+    def shutdown(self):
+        self.log.append(("shutdown",))
+
+    def close(self, error=None):
+        reason = CloseReason.ERROR if error else CloseReason.PARTICIPANT_DISCONNECTED
+        self.handlers["close"](SimpleNamespace(error=error, reason=reason))
+
+
+class FakeCtx:
+    def __init__(self, metadata: str) -> None:
+        self.job = SimpleNamespace(metadata=metadata)
+        self.room = SimpleNamespace(name="screen-abc")
+        self.callbacks = []
+
+    async def connect(self):
+        pass
+
+    def add_shutdown_callback(self, callback):
+        self.callbacks.append(callback)
+
+    async def shut_down(self):
+        # As JobContext does: a callback may take the shutdown reason, or nothing.
+        for callback in self.callbacks:
+            await (callback("job shutdown") if callback.__code__.co_argcount else callback())
+
+
+class FakeTracker:
+    opened: list = []
+
+    @classmethod
+    def open(cls, room, *, redact=False):
+        cls.opened.append((room, redact))
+        return cls()
+
+    def close(self, t):
+        pass
+
+
+@pytest.fixture
+def fakes(monkeypatch):
+    """Patch everything the entrypoint touches; returns (log, settings) to tweak."""
+    log: list = []
+    state = SimpleNamespace(load_error=None, fail_error=None, start_error=None, session=None)
+
+    def make_session(**_kw):
+        state.session = FakeSession(log, state.start_error)
+        return state.session
+
+    def load_call(sm, call_id):
+        log.append(("load_call", call_id))
+        if state.load_error:
+            raise state.load_error
+        return LoadedCall(job=sample_job(), candidate=sample_candidate(), criteria=CRITERIA)
+
+    def fail_call(sm, call_id, error):
+        log.append(("fail_call", call_id, error))
+        if state.fail_error:
+            raise state.fail_error
+
+    def finish_call(sm, call_id, outcome, turns, error=None):
+        log.append(("finish_call", call_id, outcome, error))
+
+    FakeTracker.opened = []
+    m = agent_module
+    for name, value in {
+        "AgentSession": make_session,
+        "stt": lambda: None,
+        "tts": lambda voice=None: None,
+        "main_llm": lambda: None,
+        "ShortAnswerTurnDetector": lambda *a: None,
+        "turn_handling": lambda detector=None: {},
+        "room_options": lambda: None,
+        "watch_caller": lambda *a: None,
+        "log_reply_stages": lambda *a: None,
+        "watch": lambda *a: None,
+        "DecisionTracker": FakeTracker,
+        "default_sessionmaker": lambda: None,
+        "load_call": load_call,
+        "fail_call": fail_call,
+        "finish_call": finish_call,
+    }.items():
+        monkeypatch.setattr(m, name, value)
+    monkeypatch.setattr(replies, "backup_llm", lambda: None)
+    monkeypatch.setattr(m, "CLOSE_WAIT_S", 0.01)
+    return log, state
+
+
+def metadata() -> str:
+    return json.dumps({"call_id": str(CALL_ID)})
+
+
+async def test_a_screening_dispatch_runs_the_screening_agent(fakes):
+    log, state = fakes
+    ctx = FakeCtx(metadata())
+    await agent_module.entrypoint(ctx)
+    assert log[:2] == [("load_call", CALL_ID), ("start", "ScreeningAgent")]
+    assert FakeTracker.opened == [("screen-abc", True)]  # M3: no candidate speech in logs
+    state.session.close()
+    await ctx.shut_down()
+    assert log[-1] == ("finish_call", CALL_ID, None, None)  # hung up: no outcome, no error
+
+
+async def test_a_dispatch_without_metadata_is_the_demo(fakes):
+    log, _ = fakes
+    await agent_module.entrypoint(FakeCtx(""))
+    assert log == [("start", "ReliableAgent"), ("say", agent_module.GREETING, True)]
+    assert FakeTracker.opened == [("screen-abc", False)]
+
+
+async def test_a_call_that_cannot_be_loaded_is_apologised_for_first(fakes):
+    # I2: Postgres is down: the apology is spoken (uninterruptibly) before the failed
+    # database write, and the write's error doesn't stop the hang-up.
+    log, state = fakes
+    state.load_error = state.fail_error = ConnectionError("postgres is down")
+    await agent_module.entrypoint(FakeCtx(metadata()))
+    assert [entry[0] for entry in log] == ["load_call", "start", "say", "fail_call", "shutdown"]
+    assert log[2] == ("say", APOLOGY, False)
+
+
+async def test_broken_metadata_still_gets_the_apology(fakes):
+    log, _ = fakes
+    await agent_module.entrypoint(FakeCtx('{"nope": 1}'))
+    assert [entry[0] for entry in log] == ["start", "say", "shutdown"]
+
+
+async def test_a_session_that_closes_on_an_error_is_saved_as_a_failed_call(fakes):
+    # I4: an exhausted TTS quota is not the candidate hanging up.
+    log, state = fakes
+    ctx = FakeCtx(metadata())
+    await agent_module.entrypoint(ctx)
+    state.session.close(error=RuntimeError("TTS quota exhausted"))
+    await ctx.shut_down()
+    name, call_id, outcome, error = log[-1]
+    assert (name, call_id, outcome) == ("finish_call", CALL_ID, None)
+    assert "TTS quota exhausted" in error
+
+
+async def test_a_session_that_fails_to_start_is_saved_as_a_failed_call(fakes):
+    log, state = fakes
+    state.start_error = RuntimeError("bad voice id")
+    ctx = FakeCtx(metadata())
+    with pytest.raises(RuntimeError):
+        await agent_module.entrypoint(ctx)
+    await ctx.shut_down()
+    assert log[-1][0] == "finish_call" and "bad voice id" in log[-1][3]
+
+
+async def test_an_error_after_end_call_keeps_the_agents_outcome(fakes):
+    log, state = fakes
+    ctx = FakeCtx(metadata())
+    await agent_module.entrypoint(ctx)
+    agent: ScreeningAgent = state.session.agent
+    agent.outcome = CallOutcome("completed")
+    state.session.close(error=RuntimeError("TTS dropped during the goodbye"))
+    await ctx.shut_down()
+    assert log[-1] == ("finish_call", CALL_ID, agent.outcome, None)
+
+
+async def test_saving_retries_a_database_blip(fakes, monkeypatch):
+    log, state = fakes
+    attempts = []
+
+    def flaky_finish(sm, call_id, outcome, turns, error=None):
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise ConnectionError("server closed the connection")
+
+    monkeypatch.setattr(agent_module, "finish_call", flaky_finish)
+    monkeypatch.setattr(agent_module, "SAVE_RETRY_S", 0)
+    ctx = FakeCtx(metadata())
+    await agent_module.entrypoint(ctx)
+    state.session.close()
+    await ctx.shut_down()
+    assert len(attempts) == 2

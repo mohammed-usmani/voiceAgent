@@ -53,13 +53,16 @@ class ScreeningAgent(ReliableAgent):
         super().__init__(instructions=instructions, backup=backup)
         self.greeting = greeting
         self.outcome: CallOutcome | None = None
+        self.error: str | None = None  # why the session failed, if it did (agent.py)
         self._tz = ZoneInfo(timezone)
         self._hang_up = hang_up
 
     async def on_enter(self) -> None:
         # Fixed text, so no LLM: the AI and recording disclosure is said word for word on
-        # every call, and the first words come without model latency.
-        self.session.say(self.greeting)
+        # every call, and the first words come without model latency. Uninterruptible: a
+        # "Hello?" over it must not cut the disclosure short, since the prompt tells the
+        # model it was said in full.
+        self.session.say(self.greeting, allow_interruptions=False)
 
     @function_tool
     async def end_call(

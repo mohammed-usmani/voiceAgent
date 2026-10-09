@@ -133,17 +133,27 @@ def load_call(sm: sessionmaker, call_id: uuid.UUID) -> LoadedCall:
 
 
 def finish_call(
-    sm: sessionmaker, call_id: uuid.UUID, outcome: CallOutcome | None, turns: list[dict]
+    sm: sessionmaker,
+    call_id: uuid.UUID,
+    outcome: CallOutcome | None,
+    turns: list[dict],
+    error: str | None = None,
 ) -> None:
     """Save how the call ended and what was said, then queue the assessment.
 
-    No outcome means the agent never called end_call: the candidate hung up.
+    No outcome means the agent never called end_call: the candidate hung up, unless the
+    agent's side failed (`error`): then the call failed and the candidate wasn't screened.
     """
     reason = outcome.reason if outcome else "candidate_hung_up"
     with sm() as session:
         call = lock_call(session, call_id)
         if call is None or call.status not in ACTIVE_CALL_STATUSES:
             return  # the candidate was deleted, or this call was already saved
+        if outcome is None and error is not None:
+            call.transcript = turns
+            stop_call(session, call, "failed", error)
+            session.commit()
+            return
         call.status = "completed"
         call.end_reason = reason
         call.callback_at = outcome.callback_at if outcome else None

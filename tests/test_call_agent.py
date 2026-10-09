@@ -3,7 +3,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import pytest
-from livekit.agents import llm
+from livekit.agents import AgentSession, llm
 
 from tests.fakes import ScriptedLLM, tool_call
 from tests.seed import CRITERIA, sample_candidate, sample_job
@@ -39,6 +39,22 @@ async def test_greeting_is_spoken_without_the_llm():
     result = await run_text_call(make_agent(model), model, [])
     assert texts(result) == [greeting(JOB, CANDIDATE)]
     assert model.requests == []
+
+
+async def test_the_disclosure_cannot_be_interrupted(monkeypatch):
+    # I3: a "Hello?" over the greeting must not cut off the AI and recording disclosure.
+    said = []
+    say = AgentSession.say
+
+    def record(self, text, **kw):
+        handle = say(self, text, **kw)
+        said.append((text, handle.allow_interruptions))
+        return handle
+
+    monkeypatch.setattr(AgentSession, "say", record)
+    model = ScriptedLLM([])
+    await run_text_call(make_agent(model), model, [])
+    assert said == [(greeting(JOB, CANDIDATE), False)]
 
 
 async def test_declined_consent_ends_the_call_after_the_goodbye():

@@ -61,9 +61,12 @@ def suspect_for(p: Point) -> str | None:
 
 
 class DecisionTracker:
-    def __init__(self, out: TextIO, t0: float) -> None:
+    def __init__(self, out: TextIO, t0: float, *, redact: bool = False) -> None:
         self._out = out
         self._t0 = t0
+        # Timings and outcomes only, no words: a screening call's speech lives in its
+        # transcript, which DELETE purges; this file it can't reach.
+        self._redact = redact
         self._points: list[Point] = []
         self._pause: Point | None = None  # open pause
         self._committed: Point | None = None  # latest respond, for cut-off / reply delay
@@ -74,12 +77,12 @@ class DecisionTracker:
         self._interim = ""
 
     @classmethod
-    def open(cls, room: str, log_dir: Path = LOG_DIR) -> "DecisionTracker":
+    def open(cls, room: str, log_dir: Path = LOG_DIR, *, redact: bool = False) -> "DecisionTracker":
         log_dir.mkdir(parents=True, exist_ok=True)
         now = time.time()
         stamp = datetime.fromtimestamp(now).strftime("%Y%m%d-%H%M%S")
         path = log_dir / f"{stamp}-{room}.jsonl"
-        return cls(path.open("a", buffering=1), t0=now)
+        return cls(path.open("a", buffering=1), t0=now, redact=redact)
 
     # -- caller ---------------------------------------------------------------
 
@@ -183,7 +186,10 @@ class DecisionTracker:
             if p._written or p._resolved_at is None or now < p._resolved_at + CUT_OFF_WINDOW_S:
                 continue
             p.suspect = suspect_for(p)
-            self._out.write(json.dumps(p.record()) + "\n")
+            record = p.record()
+            if self._redact:
+                record["transcript"] = record["agent_before"] = ""
+            self._out.write(json.dumps(record) + "\n")
             p._written = True
 
 

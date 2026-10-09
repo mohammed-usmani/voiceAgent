@@ -176,3 +176,19 @@ def test_record_fields():
         "paused_then_resumed",
         "suspect",
     }
+
+
+def test_redacted_log_keeps_timings_but_no_words(tmp_path):
+    # M3: a screening call's log must hold no speech; DELETE can't reach this file.
+    tr = DecisionTracker.open("screen-1", log_dir=tmp_path, redact=True)
+    tr.agent_said("Your résumé mentions four years at Infosys. Is that right?")
+    tr.user_started(tr._t0 + 1.0)
+    tr.transcript("my salary is 30 lakhs", True, tr._t0 + 1.5)
+    tr.user_stopped(tr._t0 + 2.0)
+    tr.agent_state("thinking", tr._t0 + 2.4)
+    tr.close(tr._t0 + 10.0)
+    [path] = tmp_path.iterdir()
+    text = path.read_text()
+    [record] = [json.loads(line) for line in text.splitlines()]
+    assert (record["outcome"], record["eot_delay_ms"]) == ("respond", 400)
+    assert "salary" not in text and "Infosys" not in text

@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from livekit import agents
 from livekit.agents import Agent, AgentServer, AgentSession, JobContext, inference, room_io
+from livekit.agents.voice.events import CloseEvent, CloseReason
 from livekit.plugins import cartesia, deepgram, noise_cancellation, silero
 
 from voiceagent.call.prompt import APOLOGY, build_instructions, greeting
@@ -127,22 +128,69 @@ def room_options() -> room_io.RoomOptions:
     )
 
 
+# How long the shutdown save waits for the session's own close (so the last reply is in
+# the history), and the pause between attempts to save through a database blip.
+CLOSE_WAIT_S = 10.0
+SAVE_ATTEMPTS = 3
+SAVE_RETRY_S = 2.0
+# The apology is spoken before anything touches the database, but never holds the line
+# open longer than this.
+APOLOGY_TIMEOUT_S = 15.0
+
+
 def save_on_shutdown(
     ctx: JobContext, session: AgentSession, agent: ScreeningAgent, call_id: uuid.UUID
 ) -> None:
     """Save the transcript and end reason when the call ends, however it ends."""
     closed = asyncio.Event()
-    session.on("close", lambda _ev: closed.set())
+
+    @session.on("close")
+    def _closed(ev: CloseEvent) -> None:
+        if (ev.error is not None or ev.reason == CloseReason.ERROR) and agent.error is None:
+            agent.error = f"the session closed on an error: {ev.error!r}"
+        closed.set()
 
     async def save(_reason: str) -> None:
         # Shutdown callbacks run alongside the session's own close; wait for it so the
         # last reply is in the history.
         with contextlib.suppress(TimeoutError):
-            await asyncio.wait_for(closed.wait(), timeout=10)
+            await asyncio.wait_for(closed.wait(), timeout=CLOSE_WAIT_S)
         turns = transcript(session.history)
-        await asyncio.to_thread(finish_call, default_sessionmaker(), call_id, agent.outcome, turns)
+        # An error after end_call (e.g. during the goodbye) doesn't undo the outcome.
+        error = agent.error if agent.outcome is None else None
+        for attempt in range(1, SAVE_ATTEMPTS + 1):
+            try:
+                await asyncio.to_thread(
+                    finish_call, default_sessionmaker(), call_id, agent.outcome, turns, error
+                )
+                return
+            except Exception:
+                # The worker's stale-call sweep closes the call if every attempt fails.
+                logger.exception("couldn't save call %s (attempt %s)", call_id, attempt)
+                if attempt < SAVE_ATTEMPTS:
+                    await asyncio.sleep(SAVE_RETRY_S * attempt)
 
     ctx.add_shutdown_callback(save)
+
+
+async def apologise_and_hang_up(
+    session: AgentSession, call_id: uuid.UUID | None, error: str
+) -> None:
+    """The call couldn't be loaded, most likely because Postgres is down: speak the
+    apology first, then try to record the failure, then hang up."""
+    try:
+        await asyncio.wait_for(
+            session.say(APOLOGY, allow_interruptions=False), timeout=APOLOGY_TIMEOUT_S
+        )
+    except Exception:
+        logger.exception("couldn't speak the apology")
+    if call_id is not None:
+        try:
+            await asyncio.to_thread(fail_call, default_sessionmaker(), call_id, error)
+        except Exception:
+            # The worker's stale-call sweep closes the call later.
+            logger.exception("couldn't mark call %s failed", call_id)
+    session.shutdown()
 
 
 @server.rtc_session(agent_name=AGENT_NAME)
@@ -175,7 +223,9 @@ async def entrypoint(ctx: JobContext) -> None:
     watch_caller(session, caller)
     log_reply_stages(session)
 
-    tracker = DecisionTracker.open(ctx.room.name)
+    # Screening calls log turn timings only: what the candidate says stays in the call's
+    # transcript, which deleting the candidate purges.
+    tracker = DecisionTracker.open(ctx.room.name, redact=screening)
     watch(session, tracker)
 
     async def close_log() -> None:
@@ -194,20 +244,24 @@ async def entrypoint(ctx: JobContext) -> None:
             hang_up=session.shutdown,
         )
         save_on_shutdown(ctx, session, agent, call_id)
+        try:
+            await session.start(agent=agent, room=ctx.room, room_options=room_options())
+        except Exception as e:
+            agent.error = f"the session failed to start: {e!r}"  # saved as a failed call
+            raise
     elif screening:
-        agent = Agent(instructions="You can't help on this call. Say goodbye politely.")
+        await session.start(
+            agent=Agent(instructions="You can't help on this call. Say goodbye politely."),
+            room=ctx.room,
+            room_options=room_options(),
+        )
+        await apologise_and_hang_up(session, call_id, load_error)
     else:
-        agent = ReliableAgent(instructions=INSTRUCTIONS)
-
-    await session.start(agent=agent, room=ctx.room, room_options=room_options())
-
-    if screening and loaded is None:
-        # Couldn't load the call: apologise, record it, hang up.
-        if call_id is not None:
-            await asyncio.to_thread(fail_call, default_sessionmaker(), call_id, load_error)
-        await session.say(APOLOGY)
-        session.shutdown()
-    elif not screening:
+        await session.start(
+            agent=ReliableAgent(instructions=INSTRUCTIONS),
+            room=ctx.room,
+            room_options=room_options(),
+        )
         await session.say(GREETING)
 
 

@@ -208,3 +208,19 @@ def test_call_writes_lock_the_candidate_before_the_call(engine, session, write):
     call = a_call(session, status="ringing")
     sm = make_sessionmaker(engine)
     assert for_update_targets(engine, lambda: write(sm, call.id))[:2] == ["candidates", "calls"]
+
+
+def test_an_agent_error_is_saved_as_a_failed_call_not_a_screening(engine, session):
+    # I4: the session died (TTS quota, bad voice): the candidate wasn't screened.
+    call = a_call(session)
+    finish_call(make_sessionmaker(engine), call.id, None, TURNS, error="TTSError('quota')")
+    session.expire_all()
+    c = session.get(Call, call.id)
+    assert (c.status, c.end_reason, c.error, c.transcript) == (
+        "failed",
+        "error",
+        "TTSError('quota')",
+        TURNS,
+    )
+    assert session.get(Candidate, c.candidate_id).status == "pending"
+    assert session.scalars(select(Task)).all() == []  # nothing to assess
