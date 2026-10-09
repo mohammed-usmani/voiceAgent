@@ -11,7 +11,7 @@ from voiceagent.db.base import make_sessionmaker
 TEST_URL = os.environ.get(
     "TEST_DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/screening_test"
 )
-TABLES = "jobs, criteria_versions, knowledge, tasks, events"
+TABLES = "jobs, criteria_versions, knowledge, tasks, events, candidates, calls"
 
 
 @pytest.fixture(scope="session")

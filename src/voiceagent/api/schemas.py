@@ -1,3 +1,4 @@
+import re
 import uuid
 from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -105,3 +106,104 @@ class EventOut(BaseModel):
     type: str
     data: dict
     created_at: datetime
+
+
+PHONE = re.compile(r"^\+[1-9]\d{7,14}$")  # E.164
+SIP_ADDRESS = re.compile(r"^(sip:)?[^@\s:]+@[^@\s]+$")
+EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _blank_to_none(v):
+    if isinstance(v, str):
+        v = v.strip()
+        return v or None
+    return v
+
+
+class CandidateCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    email: str = Field(max_length=320)
+    phone: str | None = Field(default=None, description="international format, e.g. +919876543210")
+    sip_address: str | None = Field(
+        default=None, max_length=200, examples=["priya@sip.linphone.org"]
+    )
+    resume_text: str = Field(default="", max_length=20000)
+
+    @field_validator("name", "resume_text", mode="before")
+    @classmethod
+    def _strip(cls, v):
+        return v.strip() if isinstance(v, str) else v
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _email(cls, v):
+        if isinstance(v, str):
+            v = v.strip().lower()
+            if not EMAIL.match(v):
+                raise ValueError(f"{v!r} is not an email address")
+        return v
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def _phone(cls, v):
+        v = _blank_to_none(v)
+        if isinstance(v, str):
+            v = re.sub(r"[\s().-]", "", v)
+            if not PHONE.match(v):
+                raise ValueError("phone must be in international format, like +919876543210")
+        return v
+
+    @field_validator("sip_address", mode="before")
+    @classmethod
+    def _sip(cls, v):
+        v = _blank_to_none(v)
+        if isinstance(v, str) and not SIP_ADDRESS.match(v):
+            raise ValueError("SIP address must look like user@host")
+        return v
+
+    @model_validator(mode="after")
+    def _reachable(self) -> "CandidateCreate":
+        if self.phone is None and self.sip_address is None:
+            raise ValueError("give a phone number or a SIP address")
+        return self
+
+
+class CandidateOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    job_id: uuid.UUID
+    name: str
+    email: str
+    phone: str | None
+    sip_address: str | None
+    resume_text: str
+    status: str
+    created_at: datetime
+
+
+class CallOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    candidate_id: uuid.UUID
+    criteria_version_id: uuid.UUID
+    room: str
+    attempt: int
+    status: str
+    end_reason: str | None
+    callback_at: datetime | None
+    consent_given: bool | None
+    started_at: datetime | None
+    ended_at: datetime | None
+    error: str | None
+    transcript: list[dict]
+    created_at: datetime
+
+
+class RowError(BaseModel):
+    row: int = Field(description="spreadsheet row; the header is row 1")
+    errors: list[str]
+
+
+class ImportResult(BaseModel):
+    created: int
+    errors: list[RowError]

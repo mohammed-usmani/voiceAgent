@@ -5,6 +5,7 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
     Float,
     ForeignKey,
@@ -119,3 +120,53 @@ class Event(Base):
     type: Mapped[str] = mapped_column(String(50))
     data: Mapped[dict] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# A call in one of these states still owns the candidate: no second call may start.
+ACTIVE_CALL_STATUSES = ("queued", "ringing", "in_progress")
+
+
+class Candidate(Timestamps, Base):
+    """Someone to screen for a job. Status: pending → calling → screened → decided →
+    notified, or no_answer, callback, declined_consent, withdrawn."""
+
+    __tablename__ = "candidates"
+    __table_args__ = (
+        UniqueConstraint("job_id", "email"),
+        CheckConstraint(
+            "phone IS NOT NULL OR sip_address IS NOT NULL", name="candidates_reachable"
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    job_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    email: Mapped[str] = mapped_column(String(320))
+    phone: Mapped[str | None] = mapped_column(String(20))
+    sip_address: Mapped[str | None] = mapped_column(String(200))
+    resume_text: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(30), default="pending")
+
+
+class Call(Timestamps, Base):
+    """One call to a candidate. Status: queued → ringing → in_progress → completed, or
+    no_answer, failed. Deleting the candidate deletes their calls and transcripts."""
+
+    __tablename__ = "calls"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    candidate_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("candidates.id", ondelete="CASCADE"), index=True
+    )
+    criteria_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("criteria_versions.id"))
+    room: Mapped[str] = mapped_column(String(100), default="")
+    attempt: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[str] = mapped_column(String(20), default="queued")
+    # completed · declined_consent · callback_requested · not_interested (the agent's
+    # end_call), candidate_hung_up · error (set by code)
+    end_reason: Mapped[str | None] = mapped_column(String(30))
+    callback_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    consent_given: Mapped[bool | None] = mapped_column(Boolean)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # [{"role": "agent" | "candidate", "text": str, "at": ISO 8601}]
+    transcript: Mapped[list] = mapped_column(JSONB, default=list)
+    error: Mapped[str | None] = mapped_column(Text)
