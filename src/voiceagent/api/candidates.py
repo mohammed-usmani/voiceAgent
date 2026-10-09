@@ -7,14 +7,15 @@ from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from voiceagent.api.deps import get_session
 from voiceagent.api.jobs import get_job
-from voiceagent.api.schemas import CandidateCreate, CandidateOut, ImportResult, RowError
-from voiceagent.db.models import Candidate
+from voiceagent.api.schemas import CallOut, CandidateCreate, CandidateOut, ImportResult, RowError
+from voiceagent.db.models import ACTIVE_CALL_STATUSES, Call, Candidate, CriteriaVersion, Job
 from voiceagent.events import emit
+from voiceagent.worker.queue import enqueue
 
 router = APIRouter()
 DB = Annotated[Session, Depends(get_session)]
@@ -154,3 +155,63 @@ def delete_candidate(candidate_id: uuid.UUID, session: DB) -> Response:
     session.delete(candidate)
     session.commit()
     return Response(status_code=204)
+
+
+@router.post("/candidates/{candidate_id}/call", status_code=202, response_model=CallOut)
+def call_candidate(candidate_id: uuid.UUID, session: DB) -> Call:
+    """Queue a call now. Calling hours, retries and campaigns arrive in milestone 5."""
+    candidate = get_candidate(session, candidate_id, lock=True)  # one request at a time
+    job = session.get(Job, candidate.job_id)
+    criteria = session.scalars(
+        select(CriteriaVersion).where(
+            CriteriaVersion.job_id == job.id, CriteriaVersion.status == "approved"
+        )
+    ).first()
+    if job.status != "active" or criteria is None:
+        raise HTTPException(
+            status_code=409, detail=f"job is {job.status}: approve its criteria before calling"
+        )
+    active = session.scalar(
+        select(Call.id).where(
+            Call.candidate_id == candidate.id, Call.status.in_(ACTIVE_CALL_STATUSES)
+        )
+    )
+    if active is not None:
+        raise HTTPException(status_code=409, detail="a call to this candidate is already active")
+    previous = session.scalar(
+        select(func.count()).select_from(Call).where(Call.candidate_id == candidate.id)
+    )
+    call = Call(
+        candidate_id=candidate.id,
+        criteria_version_id=criteria.id,
+        attempt=previous + 1,
+        status="queued",
+    )
+    session.add(call)
+    session.flush()
+    candidate.status = "calling"
+    enqueue(session, "dial", {"call_id": str(call.id)})
+    emit(
+        session,
+        "call",
+        call.id,
+        "queued",
+        {"candidate_id": str(candidate.id), "attempt": call.attempt},
+    )
+    session.commit()
+    return call
+
+
+@router.get("/candidates/{candidate_id}/calls", response_model=list[CallOut])
+def list_calls(candidate_id: uuid.UUID, session: DB) -> list[Call]:
+    candidate = get_candidate(session, candidate_id)
+    stmt = select(Call).where(Call.candidate_id == candidate.id).order_by(Call.attempt)
+    return list(session.scalars(stmt))
+
+
+@router.get("/calls/{call_id}", response_model=CallOut)
+def read_call(call_id: uuid.UUID, session: DB) -> Call:
+    call = session.get(Call, call_id)
+    if call is None:
+        raise HTTPException(status_code=404, detail="call not found")
+    return call
