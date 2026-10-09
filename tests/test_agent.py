@@ -33,3 +33,19 @@ def test_prompt_handles_repeats_and_answered_questions():
     assert "word for word" in INSTRUCTIONS
     assert "never re-ask" in INSTRUCTIONS
     assert "Always reply in English" in INSTRUCTIONS
+
+
+def test_tts_speaks_in_the_jobs_voice(monkeypatch):
+    monkeypatch.setenv("CARTESIA_API_KEY", "test")
+    from voiceagent.agent import tts
+    from voiceagent.settings import DEFAULT_VOICE
+
+    assert tts()._opts.voice == DEFAULT_VOICE
+    assert tts("voice-123")._opts.voice == "voice-123"
+
+
+def test_closing_the_session_hangs_up_the_phone():
+    # Deleting the room drops the SIP leg, so end_call (session.shutdown) really hangs up.
+    from voiceagent.agent import room_options
+
+    assert room_options().delete_room_on_close is True

@@ -134,6 +134,7 @@ Linphone server didn't answer over UDP.
 | [`decision_log.py`](src/voiceagent/decision_log.py) | Per-call log of every pause and overlap, with suspected mistakes flagged |
 | [`backchannel.py`](src/voiceagent/backchannel.py) | Which utterances are backchannels ("yeah", "uh-huh") |
 | [`outbound.py`](src/voiceagent/outbound.py) | `voiceagent-call`: have the agent call a SIP address |
+| [`call/`](src/voiceagent/call) | Screening calls: prompt from criteria, `end_call`, saving the result, text-mode harness |
 
 ## Screening backend (in progress)
 
@@ -143,11 +144,19 @@ every requirement in the description's own words, has a critic check it for lega
 phone-checkability, and revises until it passes. Approved criteria are indexed in pgvector
 and ground future jobs.
 
+Candidates are then called: the agent builds its prompt from the approved criteria, says
+up front that it is an AI assistant and that the call is recorded, asks the questions in
+order, answers only from the job's facts, closes neutrally, and ends the call with its one
+tool, `end_call`. The transcript and end reason are saved on the call. A call that arrives
+without a screening call id (someone phoning in, `voiceagent console`) is still the
+Nimbus Labs demo.
+
 ```bash
 docker compose up -d postgres
 uv run alembic upgrade head
 uv run screening-api      # REST API on :8000, needs SCREENING_API_KEY
 uv run screening-worker   # runs the agents
+uv run voiceagent dev        # the call agent; reads screening calls from DATABASE_URL
 ```
 
 | Endpoint | What |
@@ -156,7 +165,13 @@ uv run screening-worker   # runs the agents
 | `GET /jobs/{id}/criteria` | the generated criteria, with warnings and validation errors |
 | `PATCH /jobs/{id}/criteria` | edit (an approved version becomes a new draft) |
 | `POST /jobs/{id}/criteria:regenerate` · `:approve` | regenerate, or approve for calling |
+| `POST /jobs/{id}/candidates` · `:import` | add a candidate, or upload a CSV (`Content-Type: text/csv`; columns name, email, phone or sip_address, resume_text) |
+| `GET /jobs/{id}/candidates` · `GET / DELETE /candidates/{id}` | list, read, delete (deletes their calls and transcripts) |
+| `POST /candidates/{id}/call` | ring the candidate now (job active, criteria approved) |
+| `GET /calls/{id}` · `GET /candidates/{id}/calls` | status, end reason, transcript |
 | `GET /events?after=` | event feed |
+
+Phone numbers need an outbound trunk in `SIP_OUTBOUND_TRUNK_ID`; SIP addresses don't.
 
 The backend's agents run on DeepSeek-V4-Flash (backup MiniMax-M3) via Together AI's
 JSON-schema mode; embeddings come from `BAAI/bge-base-en-v1.5`, run locally.

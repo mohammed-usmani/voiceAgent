@@ -1,13 +1,29 @@
+import asyncio
+import contextlib
+import logging
 import time
+import uuid
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 from livekit import agents
-from livekit.agents import AgentServer, AgentSession, JobContext, inference, room_io
+from livekit.agents import Agent, AgentServer, AgentSession, JobContext, inference, room_io
 from livekit.plugins import cartesia, deepgram, noise_cancellation, silero
 
+from voiceagent.call.prompt import APOLOGY, build_instructions, greeting
+from voiceagent.call.screening import ScreeningAgent, call_id_from, transcript
+from voiceagent.call.store import (
+    LoadedCall,
+    default_sessionmaker,
+    fail_call,
+    finish_call,
+    load_call,
+)
 from voiceagent.decision_log import DecisionTracker, watch
 from voiceagent.outbound import AGENT_NAME
 from voiceagent.replies import ReliableAgent, log_reply_stages, main_llm
+from voiceagent.settings import DEFAULT_VOICE
 from voiceagent.short_answers import (
     CallerText,
     ShortAnswerTurnDetector,
@@ -16,7 +32,9 @@ from voiceagent.short_answers import (
 )
 
 load_dotenv()
+logger = logging.getLogger("voiceagent")
 
+# The demo recruiter, used when a call arrives without a screening call id.
 INSTRUCTIONS = (
     "You are Aria, a recruiter at Nimbus Labs, on a phone call with an applicant who was "
     "shortlisted for the AI Engineer role in Bangalore. The purpose of the call is to "
@@ -89,10 +107,10 @@ def stt() -> deepgram.STT:
     return deepgram.STT(model="nova-3", language="en-IN")
 
 
-def tts() -> cartesia.TTS:
+def tts(voice: str = DEFAULT_VOICE) -> cartesia.TTS:
     return cartesia.TTS(
         model="sonic-3.6",
-        voice="9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",  # Jacqueline
+        voice=voice,
         # "hi" gave English words Hindi pronunciation ("do" came out wrong).
         language="en",
         speed=0.9,  # 1.0 is natural pacing, which sounded rushed on phone calls
@@ -100,16 +118,57 @@ def tts() -> cartesia.TTS:
     )
 
 
+def room_options() -> room_io.RoomOptions:
+    return room_io.RoomOptions(
+        # Calls arrive over SIP: LiveKit recommends the telephony-tuned BVC model.
+        audio_input=room_io.AudioInputOptions(noise_cancellation=noise_cancellation.BVCTelephony()),
+        # Closing the session (end_call) deletes the room, which hangs up the SIP leg.
+        delete_room_on_close=True,
+    )
+
+
+def save_on_shutdown(
+    ctx: JobContext, session: AgentSession, agent: ScreeningAgent, call_id: uuid.UUID
+) -> None:
+    """Save the transcript and end reason when the call ends, however it ends."""
+    closed = asyncio.Event()
+    session.on("close", lambda _ev: closed.set())
+
+    async def save(_reason: str) -> None:
+        # Shutdown callbacks run alongside the session's own close; wait for it so the
+        # last reply is in the history.
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(closed.wait(), timeout=10)
+        turns = transcript(session.history)
+        await asyncio.to_thread(finish_call, default_sessionmaker(), call_id, agent.outcome, turns)
+
+    ctx.add_shutdown_callback(save)
+
+
 @server.rtc_session(agent_name=AGENT_NAME)
 async def entrypoint(ctx: JobContext) -> None:
     await ctx.connect()
+
+    # A screening dispatch carries {"call_id": ...} (outbound.dial). A call without
+    # metadata (someone phoning in, `voiceagent console`) is the Nimbus Labs demo.
+    screening = bool(ctx.job.metadata)
+    call_id: uuid.UUID | None = None
+    loaded: LoadedCall | None = None
+    load_error = ""
+    if screening:
+        try:
+            call_id = call_id_from(ctx.job.metadata)
+            loaded = await asyncio.to_thread(load_call, default_sessionmaker(), call_id)
+        except Exception as e:
+            logger.exception("couldn't load the screening call (metadata %r)", ctx.job.metadata)
+            load_error = repr(e)
 
     caller = CallerText()
     detector = ShortAnswerTurnDetector(caller, lambda: last_agent_text(session))
     session = AgentSession(
         stt=stt(),
         llm=main_llm(),
-        tts=tts(),
+        tts=tts(loaded.job.voice if loaded else DEFAULT_VOICE),
         vad=_vad,
         turn_handling=turn_handling(detector),
     )
@@ -124,17 +183,32 @@ async def entrypoint(ctx: JobContext) -> None:
 
     ctx.add_shutdown_callback(close_log)
 
-    await session.start(
-        agent=ReliableAgent(instructions=INSTRUCTIONS),
-        room=ctx.room,
-        room_options=room_io.RoomOptions(
-            # Calls arrive over SIP: LiveKit recommends the telephony-tuned BVC model.
-            audio_input=room_io.AudioInputOptions(
-                noise_cancellation=noise_cancellation.BVCTelephony()
+    if loaded is not None:
+        job = loaded.job
+        agent = ScreeningAgent(
+            instructions=build_instructions(
+                job, loaded.candidate, loaded.criteria, now=datetime.now(ZoneInfo(job.timezone))
             ),
-        ),
-    )
-    await session.say(GREETING)
+            greeting=greeting(job, loaded.candidate),
+            timezone=job.timezone,
+            hang_up=session.shutdown,
+        )
+        save_on_shutdown(ctx, session, agent, call_id)
+    elif screening:
+        agent = Agent(instructions="You can't help on this call. Say goodbye politely.")
+    else:
+        agent = ReliableAgent(instructions=INSTRUCTIONS)
+
+    await session.start(agent=agent, room=ctx.room, room_options=room_options())
+
+    if screening and loaded is None:
+        # Couldn't load the call: apologise, record it, hang up.
+        if call_id is not None:
+            await asyncio.to_thread(fail_call, default_sessionmaker(), call_id, load_error)
+        await session.say(APOLOGY)
+        session.shutdown()
+    elif not screening:
+        await session.say(GREETING)
 
 
 def main() -> None:
