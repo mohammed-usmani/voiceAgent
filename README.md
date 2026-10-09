@@ -197,16 +197,25 @@ Nimbus Labs demo.
 A campaign calls a job's candidates in the background. Once a minute the worker queues the
 calls that are due, inside the job's calling hours in its timezone (daylight saving
 included), at most `max_concurrent` (default 2) of the job's calls at once, manual calls
-included. A call nobody takes (no answer, busy, voicemail, or a dial that failed) is retried
-2 hours later, three calls in all; after the third the candidate is `unreachable`. A
-candidate who asked to be called back is called at the time they gave, even outside calling
-hours, but never before 09:00 or after 21:00 local. Before greeting, the agent runs
-LiveKit's answering-machine detection: on voicemail or a phone menu it says nothing and
-hangs up. The campaign is `done` once nobody can be called again; starting it again picks
-up candidates added since. Every decision is in the event feed (`campaign_started`,
-`campaign_paused`, `campaign_done`, each call's `queued` with `reason` first_call, retry
-or callback, `voicemail`, `unreachable`). A ringing phone holds one worker, so run several
-`screening-worker`s to ring in parallel.
+included. A call nobody takes (no answer, busy, voicemail, a hang-up before the agent spoke,
+or a dial that failed) is retried 2 hours later, three calls in all; after the third the
+candidate is `unreachable`. A candidate who asked to be called back is called at the time
+they gave, even outside calling hours, but never before 09:00 or after 21:00 local; one due
+just before 21:00 that no free slot picks up in time waits for 09:00 the next day. Before
+greeting, the agent runs LiveKit's answering-machine detection: on voicemail or a phone menu
+it says nothing and hangs up. The campaign is `done` once nobody can be called again;
+starting it again picks up candidates added since. Every decision is in the event feed
+(`campaign_started`, `campaign_paused`, `campaign_done`, each call's `queued` with `reason`
+first_call, retry or callback, `voicemail`, `unreachable`). A ringing phone holds one
+worker, so run several `screening-worker`s to ring in parallel.
+
+The campaigns migration (`7a3c5e1f9b20`) adds a unique index allowing one active call per
+candidate, and fails if a candidate already has two. Before upgrading an existing database,
+check that this returns no rows (and close the extra calls if it does):
+
+```sql
+SELECT candidate_id FROM calls WHERE status IN ('queued','ringing','in_progress') GROUP BY 1 HAVING count(*)>1;
+```
 
 After the call an assessment agent (LangGraph) extracts each answer from the transcript and
 checks that its quote is the candidate's own words, applies the hard requirements' rules in
