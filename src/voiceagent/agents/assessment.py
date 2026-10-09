@@ -71,8 +71,13 @@ class SoftScores(BaseModel):
 
 
 class Review(BaseModel):
-    agree: bool = Field(description="the evidence clearly supports the verdict")
-    notes: str = Field(description="what a recruiter should check, if you disagree")
+    # Reasoning before the verdict, and the verdict derived in code: with a bare `agree`
+    # first, the model disagreed and then wrote "the verdict is correct".
+    check: str = Field(description="briefly, each reason checked against the transcript")
+    problems: list[str] = Field(
+        description="each reason whose verdict the evidence doesn't clearly support, with "
+        "the requirement id and what a recruiter should check; empty if every reason holds"
+    )
 
 
 @dataclass
@@ -142,9 +147,10 @@ each reason, check the transcript: does the quoted evidence really support the v
 Could the answer have been misheard by the transcription? Did the candidate qualify or
 correct the answer later in the call? Is a rule applied to the wrong value or unit? Is it
 borderline?
-Agree only if the evidence clearly supports the verdict. Otherwise disagree and say what a
-recruiter should check. Disagreeing sends the candidate to a recruiter; it never accepts or
-rejects anyone."""
+List a problem only for a reason whose verdict the evidence doesn't clearly support. A
+reason you confirmed is not a problem: leave it out, and leave the list empty if every
+reason holds. Any problem sends the candidate to a recruiter; it never accepts or rejects
+anyone."""
     + DATA
 )
 
@@ -414,8 +420,8 @@ def run_assessment(
         )
         out = reviewer.structured(Review, REVIEWER, user)
         agent_review = {
-            "agree": out.agree,
-            "notes": out.notes,
+            "agree": not out.problems,
+            "notes": "; ".join(out.problems),
             "challenged": state["result"],
             "model": reviewer.name,
         }
@@ -423,9 +429,12 @@ def run_assessment(
             "agent_review": agent_review,
             "trace": [{"step": "review", **agent_review}],
         }
-        if not out.agree:
+        if out.problems:
             update["result"] = "needs_review"
-            update["summary"] = [*state["summary"], f"The reviewer disagreed: {out.notes}"]
+            update["summary"] = [
+                *state["summary"],
+                f"The reviewer disagreed: {agent_review['notes']}",
+            ]
         return update
 
     def finalize(state: State) -> State:

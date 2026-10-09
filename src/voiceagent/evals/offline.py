@@ -146,7 +146,7 @@ class OfflineModels:
                 ]
             }
         elif name == "Review":
-            data = {"agree": True, "notes": ""}
+            data = {"check": "", "problems": []}
         elif name == "Letter":
             first = p.name.split()[0] if p else "there"
             news = (
