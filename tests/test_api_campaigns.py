@@ -28,7 +28,18 @@ def test_starting_a_campaign(client, session):
     body = r.json()
     assert (body["status"], body["max_concurrent"], body["in_flight"]) == ("active", 2, 0)
     assert session.get(Campaign, job.id).status == "active"
-    assert [e.type for e in session.scalars(select(Event))] == ["campaign_started"]
+    assert [e.data for e in session.scalars(select(Event))] == [{"max_concurrent": 2}]
+
+
+def test_starting_an_active_campaign_again_changes_nothing_unless_its_cap_does(client, session):
+    job, _ = seed_job(session)
+    for body in (None, None, {"max_concurrent": 2}, {"max_concurrent": 4}):
+        client.post(f"/jobs/{job.id}/campaign", json=body, headers=KEY)
+    events = session.scalars(select(Event).order_by(Event.id))
+    assert [(e.type, e.data) for e in events] == [
+        ("campaign_started", {"max_concurrent": 2}),
+        ("campaign_started", {"max_concurrent": 4}),
+    ]
 
 
 @pytest.mark.parametrize(

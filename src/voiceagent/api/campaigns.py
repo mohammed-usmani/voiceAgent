@@ -70,16 +70,21 @@ def start_campaign(
         )
     now = datetime.now(UTC)
     campaign = session.get(Campaign, job.id, with_for_update=True, populate_existing=True)
+    before = campaign and (campaign.status, campaign.max_concurrent)
     if campaign is None:
         campaign = Campaign(job_id=job.id, started_at=now)
         session.add(campaign)
+        session.flush()  # fills in the defaults
     if body is not None and body.max_concurrent is not None:
         campaign.max_concurrent = body.max_concurrent
     if campaign.status != "active":
         campaign.started_at = now
     campaign.status = "active"
     campaign.paused_at = campaign.finished_at = None
-    emit(session, "job", job.id, "campaign_started", {"max_concurrent": campaign.max_concurrent})
+    if (campaign.status, campaign.max_concurrent) != before:  # not a repeated start
+        emit(
+            session, "job", job.id, "campaign_started", {"max_concurrent": campaign.max_concurrent}
+        )
     session.commit()
     return campaign_out(session, campaign)
 
