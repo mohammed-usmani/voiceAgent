@@ -41,7 +41,8 @@ def next_call_at(status: str, calls: list[Call]) -> datetime | None:
     if status not in CAMPAIGN_STATUSES:
         return None
     missed = [c for c in calls if c.status in UNANSWERED_CALL_STATUSES]
-    if len(missed) >= MAX_UNANSWERED:
+    # A callback they asked for on a later (e.g. manual) call outweighs earlier misses.
+    if len(missed) >= MAX_UNANSWERED and status != "callback":
         return None
     due = missed[-1].ended_at + RETRY_GAP if missed else ANY_TIME
     if status == "callback":

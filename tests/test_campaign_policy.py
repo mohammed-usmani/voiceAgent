@@ -47,6 +47,13 @@ def test_three_unanswered_calls_end_the_retries():
     assert next_call_at("no_answer", [missed(T), missed(T), missed(T)]) is None
 
 
+def test_a_callback_asked_for_after_three_missed_calls_is_still_made():
+    # Unreachable, then a recruiter's manual call got through and they asked for a callback.
+    at = T + timedelta(hours=7)
+    calls = [missed(T - timedelta(days=1))] * 3 + [callback(at)]
+    assert next_call_at("callback", calls) == at
+
+
 @pytest.mark.parametrize(
     "status",
     ["calling", "screened", "decided", "notified", "declined_consent", "withdrawn", "unreachable"],
