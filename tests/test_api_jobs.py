@@ -81,3 +81,7 @@ def test_events_paginate_after_an_id(client):
 def test_app_refuses_to_start_without_a_key(engine):
     with pytest.raises(RuntimeError):
         create_app(sessionmaker=make_sessionmaker(engine), models=FakeModels(), api_key="")
+
+
+def test_non_ascii_key_is_rejected_not_a_server_error(client):
+    assert client.get("/jobs", headers={"X-API-Key": "clé".encode()}).status_code == 401

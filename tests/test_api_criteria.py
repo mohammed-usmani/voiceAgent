@@ -210,3 +210,14 @@ def test_concurrent_edits_of_approved_criteria_make_one_new_draft(engine, client
     session.expire_all()
     statuses = {v.version: v.status for v in session.scalars(select(CriteriaVersion))}
     assert statuses == {1: "approved", 2: "draft"}
+
+
+def test_read_the_approved_criteria_while_a_new_draft_exists(client, session):
+    job_id = job_with_draft(client, session)
+    url = f"/jobs/{job_id}/criteria"
+    assert client.get(url, params={"status": "approved"}, headers=KEY).status_code == 404
+    client.post(f"/jobs/{job_id}/criteria:approve", headers=KEY)
+    client.patch(url, json=CRITERIA, headers=KEY)  # starts draft v2
+    assert (client.get(url, headers=KEY).json()["version"]) == 2
+    approved = client.get(url, params={"status": "approved"}, headers=KEY).json()
+    assert (approved["version"], approved["status"]) == (1, "approved")

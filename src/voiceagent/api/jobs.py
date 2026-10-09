@@ -1,6 +1,6 @@
 import uuid
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, update
@@ -100,8 +100,20 @@ def criteria_out(cv: CriteriaVersion) -> CriteriaOut:
 
 
 @router.get("/jobs/{job_id}/criteria", response_model=CriteriaOut)
-def read_criteria(job_id: uuid.UUID, session: DB) -> CriteriaOut:
+def read_criteria(
+    job_id: uuid.UUID, session: DB, status: Literal["approved"] | None = None
+) -> CriteriaOut:
+    """The latest version under review, or with `status=approved` the one calls use."""
     job = get_job(session, job_id)
+    if status == "approved":
+        cv = session.scalars(
+            select(CriteriaVersion).where(
+                CriteriaVersion.job_id == job.id, CriteriaVersion.status == "approved"
+            )
+        ).first()
+        if cv is None:
+            raise HTTPException(status_code=404, detail="no approved criteria")
+        return criteria_out(cv)
     cv = latest_criteria(session, job.id)
     if cv is None:
         raise HTTPException(status_code=404, detail=f"no criteria yet (job is {job.status})")

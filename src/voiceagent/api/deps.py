@@ -19,5 +19,5 @@ def get_models(request: Request) -> Models:
 
 def require_api_key(request: Request, x_api_key: Annotated[str | None, Header()] = None) -> None:
     expected = request.app.state.api_key
-    if not x_api_key or not secrets.compare_digest(x_api_key, expected):
+    if not x_api_key or not secrets.compare_digest(x_api_key.encode(), expected.encode()):
         raise HTTPException(status_code=401, detail="invalid or missing API key")
