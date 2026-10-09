@@ -1,12 +1,16 @@
 from sqlalchemy import select
 
 from tests.fakes import FakeModels
+from tests.seed import seed_call, seed_candidate, seed_decision, seed_job
 from voiceagent.criteria.schema import Criteria, JobFacts, Requirement, Rule
 from voiceagent.db.models import Job, Knowledge
 from voiceagent.knowledge.store import (
     add_knowledge,
+    delete_overrides,
     index_criteria,
+    index_override,
     search_knowledge,
+    search_overrides,
     similar_criteria,
 )
 
@@ -142,3 +146,114 @@ def test_similar_criteria_ignores_unrelated_roles(session):
 
 def _data(label: str) -> dict:
     return {"job_title": "Backend Engineer", "label": label, "hard": False, "question": "?"}
+
+
+SALARY = Requirement(
+    id="expected_salary",
+    label="Expected salary",
+    kind="number",
+    unit="LPA",
+    question="What salary are you expecting?",
+    weight=1.0,
+    sensitive=True,
+    source="Budget: 25-35 LPA",
+)
+PYTHON_HARD = Requirement(
+    id="python_years",
+    label="Python experience",
+    kind="number",
+    unit="years",
+    question="How many years of Python?",
+    hard=True,
+    rule=Rule(op=">=", value=3),
+    source="3+ years of Python",
+)
+
+
+def overridden_decision(session):
+    job, cv = seed_job(session)
+    candidate = seed_candidate(session, job)
+    call = seed_call(session, candidate, cv, status="completed")
+    decision = seed_decision(
+        session,
+        call,
+        reasons=[
+            {
+                "requirement_id": "python_years",
+                "verdict": "fail",
+                "score": None,
+                "quote": "two years of Python",
+                "confidence": 0.9,
+                "note": "2 >= 3 fails",
+            },
+            {
+                "requirement_id": "expected_salary",
+                "verdict": "scored",
+                "score": 0.2,
+                "quote": "around 36 lakhs",
+                "confidence": 0.9,
+                "note": "above the budget",
+            },
+        ],
+    )
+    return job, decision
+
+
+def test_an_override_becomes_calibration_for_soft_requirements_only(session):
+    models = FakeModels()
+    job, decision = overridden_decision(session)
+    index_override(
+        session,
+        models,
+        job=job,
+        decision=decision,
+        requirements=[PYTHON_HARD, SALARY],
+        final_result="suitable",
+        note="36 is fine for a senior hire",
+    )
+    session.commit()
+    rows = session.scalars(select(Knowledge).where(Knowledge.kind == "override")).all()
+    assert [r.data["requirement_id"] for r in rows] == ["expected_salary"]
+    assert "Priya" not in rows[0].text + str(rows[0].data)  # no names in calibration
+    assert search_overrides(session, models, "Backend Engineer", SALARY) == [
+        'Backend Engineer — Expected salary: the candidate said "around 36 lakhs". The agent '
+        "scored it 0.20 and judged the candidate not_suitable; the recruiter decided "
+        "suitable: 36 is fine for a senior hire"
+    ]
+    assert search_overrides(session, models, "Warehouse Supervisor", PYTHON_HARD) == []
+
+
+def test_overriding_again_replaces_the_examples(session):
+    models = FakeModels()
+    job, decision = overridden_decision(session)
+    for result in ("suitable", "not_suitable"):
+        index_override(
+            session,
+            models,
+            job=job,
+            decision=decision,
+            requirements=[SALARY],
+            final_result=result,
+            note=result,
+        )
+    session.commit()
+    rows = session.scalars(select(Knowledge).where(Knowledge.kind == "override")).all()
+    assert [r.data["recruiter_result"] for r in rows] == ["not_suitable"]
+
+
+def test_a_candidates_overrides_can_be_deleted(session):
+    models = FakeModels()
+    job, decision = overridden_decision(session)
+    index_override(
+        session,
+        models,
+        job=job,
+        decision=decision,
+        requirements=[SALARY],
+        final_result="suitable",
+        note="ok",
+    )
+    add_knowledge(session, models, "override", [(job.id, "someone else", {"candidate_id": "x"})])
+    delete_overrides(session, candidate_id=decision.candidate_id)
+    session.commit()
+    assert [k.text for k in session.scalars(select(Knowledge))] == ["someone else"]

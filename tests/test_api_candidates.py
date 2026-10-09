@@ -3,11 +3,19 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from tests.fakes import FakeModels
-from tests.seed import seed_call, seed_candidate, seed_job
+from tests.seed import (
+    CRITERIA,
+    seed_call,
+    seed_candidate,
+    seed_decision,
+    seed_finished_call,
+    seed_job,
+)
 from voiceagent.api.app import create_app
 from voiceagent.api.candidates import MAX_IMPORT_BYTES, parse_candidates_csv
 from voiceagent.db.base import make_sessionmaker
-from voiceagent.db.models import Call, Candidate, Event
+from voiceagent.db.models import Call, Candidate, Decision, Event, Job, Knowledge
+from voiceagent.knowledge.store import index_override
 
 KEY = {"X-API-Key": "test-key"}
 CSV_HEADERS = {**KEY, "Content-Type": "text/csv"}
@@ -182,3 +190,24 @@ def test_import_explains_a_non_utf8_file(client, job):
     )
     assert r.status_code == 422
     assert "UTF-8" in r.json()["detail"] and "codec" not in r.json()["detail"]
+
+
+def test_delete_removes_the_candidates_quotes_from_calibration(client, session):
+    call = seed_finished_call(session)
+    decision = seed_decision(session, call, result="not_suitable")
+    job = session.get(Job, session.get(Candidate, call.candidate_id).job_id)
+    index_override(
+        session,
+        FakeModels(),
+        job=job,
+        decision=decision,
+        requirements=CRITERIA.requirements,
+        final_result="suitable",
+        note="fine",
+    )
+    session.commit()
+    assert session.scalars(select(Knowledge)).all() != []
+    assert client.delete(f"/candidates/{call.candidate_id}", headers=KEY).status_code == 204
+    session.expire_all()
+    assert session.scalars(select(Knowledge)).all() == []
+    assert session.scalars(select(Decision)).all() == []

@@ -30,6 +30,7 @@ from voiceagent.db.models import (
     Job,
 )
 from voiceagent.events import emit
+from voiceagent.knowledge.store import delete_overrides
 from voiceagent.worker.queue import enqueue
 
 router = APIRouter()
@@ -187,9 +188,10 @@ def read_candidate(candidate_id: uuid.UUID, session: DB) -> Candidate:
 
 @router.delete("/candidates/{candidate_id}", status_code=204)
 def delete_candidate(candidate_id: uuid.UUID, session: DB) -> Response:
-    """Delete the candidate; their calls and transcripts go with them (ON DELETE CASCADE).
-    Answers and decisions (milestone 3) will cascade the same way."""
+    """Delete the candidate; their calls, transcripts, answers, decisions and messages go
+    with them (ON DELETE CASCADE), and so do their quotes in calibration examples."""
     candidate = get_candidate(session, candidate_id, lock=True)
+    delete_overrides(session, candidate_id=candidate.id)
     emit(session, "candidate", candidate.id, "deleted", {"job_id": str(candidate.job_id)})
     session.delete(candidate)
     session.commit()

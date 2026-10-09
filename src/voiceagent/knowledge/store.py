@@ -1,13 +1,13 @@
-"""Retrievable examples in pgvector: approved criteria of past jobs (and, later,
-recruiter overrides) that ground and calibrate the agents."""
+"""Retrievable examples in pgvector: approved criteria of past jobs, which ground the
+criteria agent, and recruiter overrides, which calibrate the assessment's soft scoring."""
 
 import uuid
 
 from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
-from voiceagent.criteria.schema import Criteria
-from voiceagent.db.models import Job, Knowledge
+from voiceagent.criteria.schema import Criteria, Requirement
+from voiceagent.db.models import Decision, Job, Knowledge
 from voiceagent.llm import Models
 
 
@@ -98,3 +98,84 @@ def similar_criteria(
         min_similarity=MIN_SIMILARITY,
     )
     return [_describe(h.data) for h in hits]
+
+
+def _requirement_text(job_title: str, r: Requirement) -> str:
+    return f"{job_title}: {r.label}. {r.question}"
+
+
+def index_override(
+    session: Session,
+    models: Models,
+    *,
+    job: Job,
+    decision: Decision,
+    requirements: list[Requirement],
+    final_result: str,
+    note: str,
+) -> None:
+    """Index a recruiter's override as calibration examples: one per soft requirement the
+    agent scored on a quote. Hard requirements are never calibrated (rules decide them),
+    and the candidate's name is never stored, so examples can't carry it into scoring.
+    Replaces the decision's earlier examples."""
+    delete_overrides(session, decision_id=decision.id)
+    soft = {r.id: r for r in requirements if not r.hard}
+    entries = []
+    for reason in decision.reasons:
+        r = soft.get(reason["requirement_id"])
+        if r is None or reason.get("score") is None or not reason.get("quote"):
+            continue
+        data = {
+            "candidate_id": str(decision.candidate_id),
+            "decision_id": str(decision.id),
+            "job_title": job.title,
+            "requirement_id": r.id,
+            "label": r.label,
+            "quote": reason["quote"],
+            "agent_score": reason["score"],
+            "agent_result": decision.result,
+            "recruiter_result": final_result,
+            "note": note,
+        }
+        entries.append((job.id, _requirement_text(job.title, r), data))
+    add_knowledge(session, models, "override", entries)
+
+
+def delete_overrides(
+    session: Session,
+    *,
+    decision_id: uuid.UUID | None = None,
+    candidate_id: uuid.UUID | None = None,
+) -> None:
+    """Remove override examples of one decision, or of every decision about a candidate
+    (their quotes leave with them when they are deleted)."""
+    key, value = ("decision_id", decision_id) if decision_id else ("candidate_id", candidate_id)
+    session.execute(
+        delete(Knowledge).where(
+            Knowledge.kind == "override", Knowledge.data[key].astext == str(value)
+        )
+    )
+
+
+def _describe_override(d: dict) -> str:
+    return (
+        f'{d["job_title"]} — {d["label"]}: the candidate said "{d["quote"]}". The agent '
+        f"scored it {d['agent_score']:.2f} and judged the candidate {d['agent_result']}; the "
+        f"recruiter decided {d['recruiter_result']}: {d['note']}"
+    )
+
+
+def search_overrides(
+    session: Session, models: Models, job_title: str, requirement: Requirement, k: int = 3
+) -> list[str]:
+    """Recruiter overrides on this requirement of this job or a similar one, described for
+    the soft scorer as calibration examples."""
+    hits = search_knowledge(
+        session,
+        models,
+        "override",
+        _requirement_text(job_title, requirement),
+        k=k,
+        min_similarity=MIN_SIMILARITY,
+    )
+    return [_describe_override(h.data) for h in hits]
