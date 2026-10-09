@@ -198,6 +198,8 @@ def finish_call(
 
     No outcome means the agent never called end_call: the candidate hung up, unless the
     agent's side failed (`error`): then the call failed and the candidate wasn't screened.
+    A hang-up before the agent said anything (e.g. while it listened for a machine) is
+    retried like an unanswered call.
     """
     reason = outcome.reason if outcome else "candidate_hung_up"
     with sm() as session:
@@ -207,6 +209,11 @@ def finish_call(
         if outcome is None and error is not None:
             call.transcript = turns
             stop_call(session, call, "failed", error)
+            session.commit()
+            return
+        if outcome is None and not any(t["role"] == "agent" for t in turns):
+            call.transcript = turns
+            stop_call(session, call, "no_answer", "hung up before the greeting")
             session.commit()
             return
         if reason == "voicemail":  # nobody to screen: retried like an unanswered call

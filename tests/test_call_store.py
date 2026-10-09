@@ -100,6 +100,19 @@ def test_hang_up_without_end_call_saves_the_transcript(engine, session):
     assert session.scalars(select(Task)).one().kind == "postcall"
 
 
+def test_a_hang_up_before_the_greeting_is_retried_like_no_answer(engine, session):
+    # The person said "Hello?", heard silence while the agent listened for a machine, and
+    # hung up: nobody was screened, so the campaign calls them again.
+    call = a_call(session)
+    said = [{"role": "candidate", "text": "Hello?", "at": "2026-10-09T09:00:01+00:00"}]
+    finish_call(make_sessionmaker(engine), call.id, None, said)
+    session.expire_all()
+    c = session.get(Call, call.id)
+    assert (c.status, c.end_reason, c.transcript) == ("no_answer", None, said)
+    assert session.get(Candidate, c.candidate_id).status == "no_answer"
+    assert session.scalars(select(Task)).all() == []  # no postcall
+
+
 def test_callback_time_is_saved(engine, session):
     call = a_call(session)
     when = datetime(2026, 10, 10, 17, 0, tzinfo=ZoneInfo("Asia/Kolkata"))
