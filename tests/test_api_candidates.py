@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -11,11 +13,13 @@ from tests.seed import (
     seed_finished_call,
     seed_job,
 )
+from tests.test_postcall import drain, replies
 from voiceagent.api.app import create_app
 from voiceagent.api.candidates import MAX_IMPORT_BYTES, parse_candidates_csv
 from voiceagent.db.base import make_sessionmaker
 from voiceagent.db.models import Call, Candidate, Decision, Event, Job, Knowledge
 from voiceagent.knowledge.store import index_override
+from voiceagent.worker.queue import enqueue
 
 KEY = {"X-API-Key": "test-key"}
 CSV_HEADERS = {**KEY, "Content-Type": "text/csv"}
@@ -160,6 +164,39 @@ def test_delete_purges_the_candidate_and_their_calls(client, session):
     deleted = [e for e in session.scalars(select(Event)) if e.type == "deleted"]
     assert deleted[0].data == {"job_id": str(job.id)}
     assert client.get(f"/candidates/{candidate_id}", headers=KEY).status_code == 404
+
+
+def test_deleting_a_candidate_leaves_none_of_their_words_in_other_decisions(
+    client, engine, session
+):
+    # A's override calibrates B's scoring; once A is deleted, B's decision (and its trace,
+    # served by the API) must hold nothing A said or the recruiter wrote about A.
+    a_call = seed_finished_call(session)
+    quote = "Forty lakhs and not a rupee less."
+    reason = {"requirement_id": "expected_salary", "score": 0.2, "quote": quote}
+    a = seed_decision(session, a_call, reasons=[reason])
+    job = session.get(Job, session.get(Candidate, a_call.candidate_id).job_id)
+    index_override(
+        session,
+        FakeModels(),
+        job=job,
+        decision=a,
+        requirements=CRITERIA.requirements,
+        final_result="suitable",
+        note="Anita negotiates hard",
+    )
+    b_call = seed_finished_call(session)
+    enqueue(session, "postcall", {"call_id": str(b_call.id)})
+    session.commit()
+    models = FakeModels(replies())
+    drain(engine, models)
+    assert quote in models.prompts[1][2]  # B's scorer did see the example
+    assert client.delete(f"/candidates/{a_call.candidate_id}", headers=KEY).status_code == 204
+    session.expire_all()
+    b = session.scalars(select(Decision)).one()
+    stored = json.dumps([b.trace, b.reasons, b.summary, b.agent_review])
+    assert "rupee" not in stored and "Anita" not in stored
+    assert "rupee" not in client.get(f"/decisions/{b.id}", headers=KEY).text
 
 
 def test_parse_numbers_rows_as_a_spreadsheet_does():

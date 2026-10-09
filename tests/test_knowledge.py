@@ -215,7 +215,7 @@ def test_an_override_becomes_calibration_for_soft_requirements_only(session):
     rows = session.scalars(select(Knowledge).where(Knowledge.kind == "override")).all()
     assert [r.data["requirement_id"] for r in rows] == ["expected_salary"]
     assert "Priya" not in rows[0].text + str(rows[0].data)  # no names in calibration
-    assert search_overrides(session, models, "Backend Engineer", SALARY) == [
+    assert [text for _, text in search_overrides(session, models, "Backend Engineer", SALARY)] == [
         'Backend Engineer — Expected salary: the candidate said "around 36 lakhs". The agent '
         "scored it 0.20 and judged the candidate not_suitable; the recruiter decided "
         "suitable: 36 is fine for a senior hire"

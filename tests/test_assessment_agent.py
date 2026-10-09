@@ -214,10 +214,11 @@ def test_overrides_calibrate_soft_requirements_only():
 
     def lookup(r):
         looked_up.append(r.id)
-        return ["Backend Engineer — Expected salary: recruiter decided suitable at 36 LPA"]
+        return [("k1", "Backend Engineer — Expected salary: recruiter decided suitable at 36 LPA")]
 
     models = FakeModels({EvidenceSet: [evidence()], SoftScores: [scores(0.8)]})
-    assess(models, lookup=lookup)
+    a = assess(models, lookup=lookup)
+    assert a.trace[0] == {"step": "calibrate", "examples": {"expected_salary": ["k1"]}}
     assert looked_up == ["expected_salary"]
     scorer_prompt = models.prompts[1][2]
     assert "recruiter decided suitable at 36 LPA" in scorer_prompt

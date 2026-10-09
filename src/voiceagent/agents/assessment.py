@@ -182,11 +182,12 @@ def run_assessment(
     transcript: list[dict],
     resume: str,
     end_reason: str,
-    overrides_lookup: Callable[[Requirement], list[str]],
+    overrides_lookup: Callable[[Requirement], list[tuple[str, str]]],
     heartbeat: Callable[[], None] = lambda: None,
     auto_send: bool = False,
 ) -> Assessment:
-    """`overrides_lookup(requirement)` returns calibration examples for a soft requirement.
+    """`overrides_lookup(requirement)` returns calibration examples for a soft requirement,
+    as (id, text). The trace keeps only their ids: the text is another candidate's words.
     `heartbeat` runs before every step, so a worker can keep its task's lease alive.
     `auto_send`: a suitable result would email an invite with no human in the loop, so the
     reviewer challenges it too."""
@@ -195,14 +196,22 @@ def run_assessment(
     resume_block = f"Résumé:\n{resume or '(none)'}"
 
     def calibrate(state: State) -> State:
-        examples: dict[str, list[str]] = {}
+        found: dict[str, list[tuple[str, str]]] = {}
         for r in soft:
             try:
-                examples[r.id] = overrides_lookup(r)
+                found[r.id] = overrides_lookup(r)
             except Exception:  # calibration only sharpens scoring; score without it
                 logger.exception("override lookup failed for %s", r.id)
-                examples[r.id] = []
-        return {"examples": examples, "trace": [{"step": "calibrate", "examples": examples}]}
+                found[r.id] = []
+        return {
+            "examples": {rid: [text for _, text in ex] for rid, ex in found.items()},
+            "trace": [
+                {
+                    "step": "calibrate",
+                    "examples": {rid: [i for i, _ in ex] for rid, ex in found.items()},
+                }
+            ],
+        }
 
     def evidence(state: State) -> State:
         user = (

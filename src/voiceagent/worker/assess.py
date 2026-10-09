@@ -77,7 +77,7 @@ def postcall(session: Session, models: Models, task: Task) -> None:
     end_reason = call.end_reason or "unknown"
     session.rollback()  # hold no transaction (or locks) through the slow agent run
 
-    def overrides(r: Requirement) -> list[str]:
+    def overrides(r: Requirement) -> list[tuple[str, str]]:
         try:
             return search_overrides(session, models, title, r)
         finally:

@@ -167,9 +167,10 @@ def _describe_override(d: dict) -> str:
 
 def search_overrides(
     session: Session, models: Models, job_title: str, requirement: Requirement, k: int = 3
-) -> list[str]:
-    """Recruiter overrides on this requirement of this job or a similar one, described for
-    the soft scorer as calibration examples."""
+) -> list[tuple[str, str]]:
+    """Recruiter overrides on this requirement of this job or a similar one, as (knowledge
+    id, description for the soft scorer) calibration examples. Callers store the id, never
+    the text: the text is another candidate's words, which must leave when they do."""
     hits = search_knowledge(
         session,
         models,
@@ -178,4 +179,4 @@ def search_overrides(
         k=k,
         min_similarity=MIN_SIMILARITY,
     )
-    return [_describe_override(h.data) for h in hits]
+    return [(str(h.id), _describe_override(h.data)) for h in hits]
