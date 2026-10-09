@@ -50,7 +50,7 @@ class ScreeningAgent(ReliableAgent):
         instructions: str,
         greeting: str,
         timezone: str,
-        hang_up: Callable[[], object] | None = None,
+        hang_up: Callable[..., object] | None = None,
         backup: llm.LLM | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         detect_machine: Callable[[], Awaitable[bool]] | None = None,
@@ -70,11 +70,11 @@ class ScreeningAgent(ReliableAgent):
     async def on_enter(self) -> None:
         if self._detect_machine is not None:
             if await self._detect_machine():
-                # Voicemail or an automated menu: leave no message, just hang up; a
-                # campaign tries again later.
+                # Voicemail or an automated menu: leave no message, just hang up without
+                # playing anything still queued; a campaign tries again later.
                 self.outcome = CallOutcome("voicemail")
                 if self._hang_up is not None:
-                    self._hang_up()
+                    self._hang_up(drain=False)
                 return
         # Fixed text, so no LLM: the AI and recording disclosure is said word for word on
         # every call, and the first words come without model latency. Uninterruptible: a
