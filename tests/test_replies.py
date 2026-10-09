@@ -1,11 +1,11 @@
 def test_voice_models_run_on_together_without_thinking(monkeypatch):
-    # Reasoning tokens arrive before the first spoken word. With reasoning off, Qwen3.5-9B
-    # on Together answered the screening prompt in 0.64 s median (0.74 s worst).
+    # Reasoning tokens arrive before the first spoken word. With reasoning off, MiniMax-M3
+    # on Together answered the screening prompt in 0.77 s median (1.09 s worst).
     monkeypatch.setenv("TOGETHER_API_KEY", "test")
     from voiceagent.replies import backup_llm, main_llm
 
     main, backup = main_llm(), backup_llm()
-    assert (main.model, backup.model) == ("Qwen/Qwen3.5-9B", "MiniMaxAI/MiniMax-M3")
+    assert (main.model, backup.model) == ("MiniMaxAI/MiniMax-M3", "zai-org/GLM-5.3")
     for m in (main, backup):
         assert m._opts.extra_body == {"reasoning": {"enabled": False}}
         assert str(m._client.base_url).startswith("https://api.together.xyz/v1")

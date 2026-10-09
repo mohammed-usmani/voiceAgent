@@ -14,6 +14,7 @@ PRICES: dict[str, tuple[float, float]] = {
     "deepseek-ai/DeepSeek-V4-Pro-0813": (1.32, 3.96),
     "MiniMaxAI/MiniMax-M3": (0.30, 1.20),
     "Qwen/Qwen3.5-9B": (0.17, 0.25),
+    "zai-org/GLM-5.3": (1.40, 4.40),
     "offline": (0.0, 0.0),
 }
 # A model missing from the table is charged at the dearest price, so the budget errs high.

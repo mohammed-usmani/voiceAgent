@@ -1,5 +1,5 @@
-"""A short text-mode screening call against the real voice model (Qwen3.5-9B on Together,
-backup MiniMax-M3). A few cheap LLM calls:
+"""A short text-mode screening call against the real voice model (MiniMax-M3 on Together,
+backup GLM-5.3). A few cheap LLM calls:
 RUN_LIVE=1 uv run pytest tests/live/test_call_live.py -v -s"""
 
 import os

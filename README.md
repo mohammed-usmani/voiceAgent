@@ -38,7 +38,7 @@ A faster model (Qwen3.8-27B on Groq, ~0.16 s to first token) was tried and dropp
 real conversations its replies came back empty or cut off mid-sentence, with no error.
 
 Scale: one caller, ten test calls. These were measured with Gemini 2.5 Flash; the agent
-now runs Qwen3.5-9B on Together AI (see [Model choice](#model-choice)), and the call
+now runs MiniMax-M3 on Together AI (see [Model choice](#model-choice)), and the call
 numbers will be re-measured.
 
 ### Screening evaluation
@@ -123,7 +123,7 @@ A voice agent that gets no reply text says nothing, and the caller hears dead ai
 |---|---|
 | Transport / orchestration | LiveKit Agents, with calls over SIP |
 | STT | Deepgram Nova-3, Indian English (`en-IN`) |
-| LLM | Qwen3.5-9B on Together AI with reasoning off (0.64 s median to first token); MiniMax-M3 answers if a reply comes back empty or fails |
+| LLM | MiniMax-M3 on Together AI with reasoning off (0.77 s median to first token); GLM-5.3 answers if a reply comes back empty or fails |
 | TTS | Cartesia Sonic-3.6, voice Jacqueline, English |
 
 ## Running it
@@ -268,15 +268,21 @@ arrives.
 
 | Model | First token, median | First token, worst | Empty replies |
 |---|---|---|---|
-| **Qwen/Qwen3.5-9B** (chosen) | **0.64 s** | 0.74 s | 0/5 |
-| zai-org/GLM-5.3 | 0.67 s | 0.99 s | 0/5 |
+| Qwen/Qwen3.5-9B | **0.64 s** | 0.74 s | 0/5 |
+| **zai-org/GLM-5.3** (backup) | 0.67 s | 0.99 s | 0/5 |
 | deepseek-ai/DeepSeek-V4.1-Flash | 0.68 s | 3.43 s | 0/5 |
-| **MiniMaxAI/MiniMax-M3** (backup) | 0.77 s | 1.09 s | 0/5 |
+| **MiniMaxAI/MiniMax-M3** (chosen) | 0.77 s | 1.09 s | 0/5 |
 | meta-models/Muse-Glimmer-30B | 0.79 s | 1.32 s | 0/5 |
 | zai-org/GLM-5.3-Flash | 0.83 s | 1.35 s | 0/5 |
 | deepseek-ai/DeepSeek-V4-Flash-0731 | 0.85 s | 1.42 s | 0/5 |
 | meta-llama/Llama-3.3-70B-Instruct-Turbo | 1.47 s | 2.50 s | 0/5 |
 | openai/gpt-oss-120b | 1.51 s | 1.61 s | 1/5 |
+
+Speed wasn't enough. On a scripted 4-answer call (10 runs per model), Qwen3.5-9B ended
+7 calls with `end_call` before the questions were done, twice as "declined consent" right
+after the candidate said yes. MiniMax-M3, GLM-5.3 and DeepSeek-V4.1-Flash ended none
+early. MiniMax-M3 is the voice model: GLM-5.3 is 0.1 s faster but about 5x the price per
+token ($1.40/$4.40 per million vs $0.30/$1.20), so it is the backup.
 
 **Screening criteria.** The full criteria agent (draft, check every requirement against
 the job description, critique, revise up to 3 times), reasoning on, run once on two job
