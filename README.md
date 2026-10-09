@@ -41,6 +41,29 @@ Scale: one caller, ten test calls. These were measured with Gemini 2.5 Flash; th
 now runs Qwen3.5-9B on Together AI (see [Model choice](#model-choice)), and the call
 numbers will be re-measured.
 
+### Screening evaluation
+
+First run of `uv run screening-eval` on 2026-10-09: 6 reference jobs, 4 simulated candidates
+each plus 4 fairness replays, real models on Together AI, $0.10 in total. The run finished
+without hitting its budget. Most calls ended after only 1-3 candidate turns (3.25 on
+average, against 6-8 questions per job), so most were sent to review instead of decided:
+read the call-stage numbers below as a first look at a harness that needs tuning, not as
+the agent's quality.
+
+| Stage | Result |
+|---|---|
+| Criteria generation | recall 0.84, precision 0.66, hard flags 0.81, rules 0.83, illegal lines dropped 1.00 |
+| Answer capture | 0.47 of answers extracted correctly; 1.47 questions missed and 0 re-asked per call |
+| Decisions | accuracy 0.20; false rejections 0.00; sent to review 0.90 |
+| Conversation | asked all required questions 0.63 (lowest); every other check at or above 0.88 |
+| Messages | professional 1.00; rejections without reasons: no rejection was sent in this run (2 messages, both invites) |
+| Reviewer | caught 0 wrong rejections and 0 wrong invites; 3 + 0 needless escalations (and 2 wrong invites let through) |
+| Calibration | accuracy 0.27 → 0.27 with recruiter overrides (11 calls) |
+| Fairness | fail: the four names did not get the same decision (3 needs_review, 1 suitable); score spread not computable (3 of 4 unscored) |
+| Cost | $0.003 and 3.25 candidate turns per call |
+
+Scale: one run, 24 personas; these are measurements, not a benchmark.
+
 ## Turn-taking
 
 LiveKit's recommended turn-taking setup
