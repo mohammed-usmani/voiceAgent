@@ -12,6 +12,7 @@ from voiceagent.db.models import CriteriaVersion, Job, Task
 from voiceagent.events import emit
 from voiceagent.knowledge.store import similar_criteria
 from voiceagent.llm import Models
+from voiceagent.worker.dial import dial, dial_failed
 from voiceagent.worker.queue import heartbeat
 
 
@@ -82,4 +83,5 @@ def generate_criteria_failed(session: Session, payload: dict, error: str) -> Non
 
 HANDLERS = {
     "generate_criteria": (generate_criteria, generate_criteria_failed),
+    "dial": (dial, dial_failed),
 }

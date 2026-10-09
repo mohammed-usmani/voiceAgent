@@ -31,14 +31,16 @@ def parse_address(address: str) -> tuple[str, str]:
     return user, host or DEFAULT_HOST
 
 
-def dial_request(trunk_id: str, user: str, room: str) -> api.CreateSIPParticipantRequest:
+def dial_request(
+    trunk_id: str, to: str, room: str, display_name: str = CALLER_NAME
+) -> api.CreateSIPParticipantRequest:
     return api.CreateSIPParticipantRequest(
         sip_trunk_id=trunk_id,
-        sip_call_to=user,
+        sip_call_to=to,
         room_name=room,
         participant_identity="candidate",
         participant_name="Candidate",
-        display_name=CALLER_NAME,
+        display_name=display_name,
         # Dispatch the agent only after pickup, so its greeting isn't spoken to a ringtone.
         wait_until_answered=True,
     )
@@ -64,22 +66,41 @@ async def trunk_for(lk: api.LiveKitAPI, host: str) -> str:
     return trunk.sip_trunk_id
 
 
-async def call(address: str) -> None:
-    user, host = parse_address(address)
-    room = f"call-out-{secrets.token_hex(4)}"
+async def dial(
+    address: str, room: str, *, display_name: str = CALLER_NAME, metadata: str = ""
+) -> None:
+    """Ring `address` and, once answered, send the agent into `room` with `metadata`.
+
+    `address` is a phone number (+E.164, through the trunk in SIP_OUTBOUND_TRUNK_ID) or a
+    SIP address (through a per-host trunk created on first use). Raises api.SipCallError
+    when the call isn't answered (busy, no answer, declined: see `sip_status_code`).
+    """
     lk = api.LiveKitAPI()
     try:
-        trunk_id = await trunk_for(lk, host)
-        print(f"ringing sip:{user}@{host} ...", flush=True)
-        await lk.sip.create_sip_participant(dial_request(trunk_id, user, room))
+        if address.startswith("+"):
+            trunk_id = os.environ.get("SIP_OUTBOUND_TRUNK_ID", "")
+            if not trunk_id:
+                raise RuntimeError("set SIP_OUTBOUND_TRUNK_ID to call phone numbers")
+            to = address
+        else:
+            to, host = parse_address(address)
+            trunk_id = await trunk_for(lk, host)
+        await lk.sip.create_sip_participant(dial_request(trunk_id, to, room, display_name))
         await lk.agent_dispatch.create_dispatch(
-            api.CreateAgentDispatchRequest(agent_name=AGENT_NAME, room=room)
+            api.CreateAgentDispatchRequest(agent_name=AGENT_NAME, room=room, metadata=metadata)
         )
+    finally:
+        await lk.aclose()
+
+
+async def call(address: str) -> None:
+    room = f"call-out-{secrets.token_hex(4)}"
+    print(f"ringing {address} ...", flush=True)
+    try:
+        await dial(address, room)
         print(f"answered; agent joining room {room}")
     except api.TwirpError as e:
         sys.exit(f"call failed: {e.code} {e.message}")
-    finally:
-        await lk.aclose()
 
 
 def main() -> None:
