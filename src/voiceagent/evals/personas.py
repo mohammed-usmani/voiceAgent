@@ -10,6 +10,7 @@ import json
 
 from pydantic import BaseModel, Field
 
+from voiceagent.agents.tools import numbers_in
 from voiceagent.criteria.schema import Requirement
 from voiceagent.evals.jobs import RefJob
 from voiceagent.llm import Models
@@ -154,8 +155,9 @@ def persona_keys(job: RefJob, n: int, offset: int = 0) -> list[str]:
     return keys[:n]
 
 
-def _plan(job: RefJob, key: str) -> tuple[dict[str, Value], list[str], str, str]:
-    """Ground truth for the hard requirements, declined ids, behaviour, résumé guidance."""
+def _plan(job: RefJob, key: str) -> tuple[dict[str, Value], list[str], str, str, float | None]:
+    """Ground truth for the hard requirements, declined ids, behaviour, résumé guidance,
+    and a number the résumé must show (or None)."""
     kind, _, target = key.partition(":")
     reqs = job.criteria.requirements
     hard = [r for r in reqs if r.hard]
@@ -164,6 +166,7 @@ def _plan(job: RefJob, key: str) -> tuple[dict[str, Value], list[str], str, str]
     declined: list[str] = []
     cooperative = "You are cooperative and clear: answer each question directly in a sentence."
     behaviour, resume_note = cooperative, "consistent with every fact below"
+    shown = None
     if kind == "miss":
         r = next(r for r in hard if r.id == target)
         truth[r.id] = rule_value(r, "fail")
@@ -173,6 +176,8 @@ def _plan(job: RefJob, key: str) -> tuple[dict[str, Value], list[str], str, str]
             f"; it must show {json.dumps(truth[r.id])} {r.unit or ''} for {r.label.lower()}, "
             "which doesn't meet the job's requirement"
         )
+        if r.kind == "number":
+            shown = truth[r.id]
     elif kind == "borderline":
         behaviour = (
             "You are cooperative but your answers are average and a little hesitant, "
@@ -217,7 +222,7 @@ def _plan(job: RefJob, key: str) -> tuple[dict[str, Value], list[str], str, str]
             f" Claim {truth[r.id]} {r.unit or ''} for {r.label.lower()}, more than your résumé "
             "shows. If the agent mentions the résumé, say it is out of date."
         )
-    return truth, declined, behaviour, resume_note
+    return truth, declined, behaviour, resume_note, shown
 
 
 PERSONA_WRITER = """You create a realistic job candidate in India for testing an automated phone
@@ -237,7 +242,7 @@ QUALITY = {
 def make_persona(models: Models, job: RefJob, key: str, name: str) -> Persona:
     kind = key.partition(":")[0]
     reqs = job.criteria.requirements
-    truth, declined, behaviour, resume_note = _plan(job, key)
+    truth, declined, behaviour, resume_note, shown = _plan(job, key)
     soft = [r for r in reqs if not r.hard]
     facts = {
         r.label: ("declines to say" if r.id in declined else truth[r.id])
@@ -260,7 +265,15 @@ def make_persona(models: Models, job: RefJob, key: str, name: str) -> Persona:
         )
     )
     quality = QUALITY.get(kind, "strong - each answer fully meets its rubric")
-    draft = models.structured(PersonaDraft, PERSONA_WRITER.format(quality=quality), user)
+    system = PERSONA_WRITER.format(quality=quality)
+    draft = models.structured(PersonaDraft, system, user)
+    # The writer has ignored the résumé guidance (a 1-year candidate's résumé said 3), and
+    # a résumé that hides the case being tested mislabels the whole persona.
+    if shown and shown not in numbers_in(draft.resume):  # a résumé never says "0 years"
+        retry = f"{user}\n\nYour last résumé didn't show {shown:g}: it must."
+        draft = models.structured(PersonaDraft, system, retry)
+        if shown not in numbers_in(draft.resume):
+            raise ValueError(f"the persona's résumé doesn't show {shown:g}")
     allowed = {r.id: r for r in soft if r.id not in declined}
     for a in draft.soft_answers:
         r = allowed.get(a.requirement_id)

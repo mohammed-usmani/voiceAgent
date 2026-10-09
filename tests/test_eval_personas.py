@@ -22,7 +22,8 @@ SE = next(j for j in JOBS if j.slug == "software-engineer")
 
 def draft(**answers) -> PersonaDraft:
     return PersonaDraft(
-        resume="Backend engineer at a payments startup since 2021.",
+        # shows the failing values the miss and overstating personas below must show
+        resume="Backend engineer at a payments startup: 2 years of Python, 120 days' notice.",
         soft_answers=[SoftAnswer(requirement_id=k, value=v) for k, v in answers.items()],
     )
 
@@ -190,3 +191,12 @@ def test_a_borderline_persona_is_told_to_cover_one_rubric_point():
     models = FakeModels({PersonaDraft: [draft()]})
     make_persona(models, SE, "borderline", "Kavya Reddy")
     assert "covers only one point of its rubric" in models.prompts[0][1]
+
+
+def test_a_resume_that_hides_the_tested_number_is_retried_then_refused():
+    hides = PersonaDraft(resume="Backend engineer since 2021.", soft_answers=[])
+    fixed = FakeModels({PersonaDraft: [hides, draft()]})
+    assert make_persona(fixed, SE, "miss:python_years", "R").resume == draft().resume
+    assert "didn't show 2" in fixed.prompts[1][2]
+    with pytest.raises(ValueError, match="doesn't show 2"):
+        make_persona(FakeModels({PersonaDraft: [hides, hides]}), SE, "overstates", "R")
