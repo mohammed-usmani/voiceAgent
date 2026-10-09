@@ -13,6 +13,7 @@ from voiceagent.worker.queue import claim, complete, fail
 
 logger = logging.getLogger("voiceagent.worker")
 IDLE_SLEEP_S = 1.0
+ERROR_SLEEP_S = 5.0
 
 
 def run_once(sessionmaker: SessionMaker, models: Models) -> bool:
@@ -21,21 +22,27 @@ def run_once(sessionmaker: SessionMaker, models: Models) -> bool:
         task = claim(session)
         if task is None:
             return False
-        handler = HANDLERS.get(task.kind)
-        if handler is None:
+        run, on_failure = HANDLERS.get(task.kind, (None, None))
+        if task.status == "failed":  # its worker died on the last attempt
+            logger.error("task %s (%s): %s", task.id, task.kind, task.last_error)
+            if on_failure is not None:
+                on_failure(session, task.payload, task.last_error)
+            session.commit()
+            return True
+        if run is None:
             task.attempts = task.max_attempts
             fail(session, task, f"unknown task kind {task.kind!r}")
             return True
-        run, on_failure = handler
         try:
-            run(session, models, task.payload)
+            run(session, models, task)
         except Exception as e:
             session.rollback()
             logger.exception("task %s (%s) failed", task.id, task.kind)
             if fail(session, task, repr(e)) and on_failure is not None:
                 on_failure(session, task.payload, repr(e))
+                session.commit()
         else:
-            complete(session, task)
+            complete(session, task)  # commits the handler's writes too
         return True
 
 
@@ -46,5 +53,11 @@ def main() -> None:
     models = default_models(settings)
     logger.info("worker started")
     while True:
-        if not run_once(sessionmaker, models):
+        try:
+            busy = run_once(sessionmaker, models)
+        except Exception:  # e.g. Postgres restarting; the task's lease brings it back
+            logger.exception("worker loop failed; retrying in %ss", ERROR_SLEEP_S)
+            time.sleep(ERROR_SLEEP_S)
+            continue
+        if not busy:
             time.sleep(IDLE_SLEEP_S)

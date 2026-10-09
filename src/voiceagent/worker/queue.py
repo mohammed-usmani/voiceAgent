@@ -21,34 +21,37 @@ def enqueue(session: Session, kind: str, payload: dict, run_at: datetime | None 
 
 
 def claim(session: Session) -> Task | None:
-    while True:
-        now = datetime.now(UTC)
-        stmt = (
-            select(Task)
-            .where(
-                or_(
-                    and_(Task.status == "queued", Task.run_at <= now),
-                    and_(Task.status == "running", Task.started_at < now - LEASE),
-                )
+    """Take the next due task and mark it running.
+
+    A task whose lease ran out on its last attempt comes back already `failed`, uncommitted
+    and still locked, so the caller can run the handler's failure hook in the same commit.
+    """
+    now = datetime.now(UTC)
+    stmt = (
+        select(Task)
+        .where(
+            or_(
+                and_(Task.status == "queued", Task.run_at <= now),
+                and_(Task.status == "running", Task.started_at < now - LEASE),
             )
-            .order_by(Task.run_at)
-            .limit(1)
-            .with_for_update(skip_locked=True)
         )
-        task = session.scalars(stmt).first()
-        if task is None:
-            session.commit()
-            return None
-        if task.status == "running" and task.attempts >= task.max_attempts:
-            task.status = "failed"
-            task.last_error = "worker lost the task (lease expired) and it is out of attempts"
-            session.commit()
-            continue
-        task.status = "running"
-        task.attempts += 1
-        task.started_at = now
+        .order_by(Task.run_at)
+        .limit(1)
+        .with_for_update(skip_locked=True)
+    )
+    task = session.scalars(stmt).first()
+    if task is None:
         session.commit()
+        return None
+    if task.status == "running" and task.attempts >= task.max_attempts:
+        task.status = "failed"
+        task.last_error = "worker lost the task (lease expired) and it is out of attempts"
         return task
+    task.status = "running"
+    task.attempts += 1
+    task.started_at = now
+    session.commit()
+    return task
 
 
 def complete(session: Session, task: Task) -> None:

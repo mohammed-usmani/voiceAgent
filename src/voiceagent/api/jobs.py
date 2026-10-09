@@ -19,8 +19,10 @@ router = APIRouter()
 DB = Annotated[Session, Depends(get_session)]
 
 
-def get_job(session: Session, job_id: uuid.UUID) -> Job:
-    job = session.get(Job, job_id)
+def get_job(session: Session, job_id: uuid.UUID, *, lock: bool = False) -> Job:
+    """`lock=True` takes the job row lock that serializes everything that changes a job's
+    criteria (these endpoints and the worker), so versions and status can't race."""
+    job = session.get(Job, job_id, with_for_update=lock or None, populate_existing=lock)
     if job is None:
         raise HTTPException(status_code=404, detail="job not found")
     return job
@@ -108,7 +110,7 @@ def read_criteria(job_id: uuid.UUID, session: DB) -> CriteriaOut:
 
 @router.patch("/jobs/{job_id}/criteria", response_model=CriteriaOut)
 def edit_criteria(job_id: uuid.UUID, body: Criteria, session: DB) -> CriteriaOut:
-    job = get_job(session, job_id)
+    job = get_job(session, job_id, lock=True)
     cv = latest_criteria(session, job.id)
     if cv is None:
         raise HTTPException(status_code=409, detail=f"no criteria to edit (job is {job.status})")
@@ -134,7 +136,7 @@ def edit_criteria(job_id: uuid.UUID, body: Criteria, session: DB) -> CriteriaOut
 
 @router.post("/jobs/{job_id}/criteria:regenerate", status_code=202, response_model=JobOut)
 def regenerate_criteria(job_id: uuid.UUID, session: DB) -> Job:
-    job = get_job(session, job_id)
+    job = get_job(session, job_id, lock=True)
     pending = session.scalar(
         select(Task.id).where(
             Task.kind == "generate_criteria",
@@ -156,7 +158,7 @@ def regenerate_criteria(job_id: uuid.UUID, session: DB) -> Job:
 def approve_criteria(
     job_id: uuid.UUID, session: DB, models: Annotated[Models, Depends(get_models)]
 ) -> CriteriaOut:
-    job = get_job(session, job_id)
+    job = get_job(session, job_id, lock=True)
     cv = latest_criteria(session, job.id)
     if cv is None or cv.status != "draft":
         raise HTTPException(status_code=409, detail="no draft criteria to approve")

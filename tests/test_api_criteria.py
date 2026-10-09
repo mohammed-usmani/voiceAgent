@@ -1,3 +1,6 @@
+import threading
+import time
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -161,3 +164,49 @@ def test_regenerating_an_active_job_keeps_it_active(client, session):
     assert client.post(f"/jobs/{job_id}/criteria:regenerate", headers=KEY).status_code == 202
     session.expire_all()
     assert session.get(Job, job_id).status == "active"
+
+
+def race(engine, job_id, method, path, json=None):
+    """Send the same request twice at once, both queued behind a lock on the job row."""
+    results = []
+
+    def call():
+        try:
+            r = getattr(make_client(engine), method)(path, json=json, headers=KEY)
+            results.append(r.status_code)
+        except Exception as e:  # e.g. an IntegrityError surfacing as a 500
+            results.append(type(e).__name__)
+
+    with make_sessionmaker(engine)() as lock:
+        lock.execute(select(Job).where(Job.id == job_id).with_for_update())
+        threads = [threading.Thread(target=call) for _ in range(2)]
+        for t in threads:
+            t.start()
+        time.sleep(0.5)  # both requests are now waiting on the lock
+        lock.commit()
+    for t in threads:
+        t.join(10)
+    return sorted(results, key=str)
+
+
+def test_double_approve_indexes_once(engine, client, session):
+    job_id = job_with_draft(client, session)
+    assert race(engine, job_id, "post", f"/jobs/{job_id}/criteria:approve") == [200, 409]
+    session.expire_all()
+    assert len(session.scalars(select(Knowledge)).all()) == 1
+
+
+def test_double_regenerate_queues_once(engine, client, session):
+    job_id = job_with_draft(client, session)
+    assert race(engine, job_id, "post", f"/jobs/{job_id}/criteria:regenerate") == [202, 409]
+    session.expire_all()
+    assert len(session.scalars(select(Task)).all()) == 2  # create + one regenerate
+
+
+def test_concurrent_edits_of_approved_criteria_make_one_new_draft(engine, client, session):
+    job_id = job_with_draft(client, session)
+    client.post(f"/jobs/{job_id}/criteria:approve", headers=KEY)
+    assert race(engine, job_id, "patch", f"/jobs/{job_id}/criteria", json=CRITERIA) == [200, 200]
+    session.expire_all()
+    statuses = {v.version: v.status for v in session.scalars(select(CriteriaVersion))}
+    assert statuses == {1: "approved", 2: "draft"}

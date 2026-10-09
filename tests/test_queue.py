@@ -54,9 +54,10 @@ def test_reclaimed_task_out_of_attempts_fails(session):
     task.status, task.attempts, task.max_attempts = "running", 3, 3
     task.started_at = datetime.now(UTC) - LEASE - timedelta(seconds=1)
     session.commit()
-    assert claim(session) is None
+    assert claim(session).id == task.id  # returned failed, for the caller's failure hook
+    session.commit()
     session.refresh(task)
-    assert task.status == "failed" and "lease" in task.last_error
+    assert (task.status, task.attempts) == ("failed", 3) and "lease" in task.last_error
 
 
 def test_emit_appends_ordered_events(session):
