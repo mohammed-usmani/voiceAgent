@@ -28,7 +28,8 @@ from voiceagent.worker.queue import enqueue
 
 @dataclass(frozen=True)
 class CallOutcome:
-    """How the agent ended the call (its end_call), as stored on the call row."""
+    """How the agent ended the call (its end_call, or "voicemail" when a machine answered),
+    as stored on the call row."""
 
     reason: str
     callback_at: datetime | None = None
@@ -195,6 +196,11 @@ def finish_call(
         if outcome is None and error is not None:
             call.transcript = turns
             stop_call(session, call, "failed", error)
+            session.commit()
+            return
+        if reason == "voicemail":  # nobody to screen: retried like an unanswered call
+            call.transcript = turns
+            stop_call(session, call, "voicemail", "a machine answered; no message was left")
             session.commit()
             return
         call.status = "completed"

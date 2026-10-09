@@ -6,7 +6,7 @@ import uuid
 from types import SimpleNamespace
 
 import pytest
-from livekit.agents import llm
+from livekit.agents import AMDCategory, AMDPredictionEvent, llm
 from livekit.agents.voice.events import CloseReason
 
 from tests.seed import CRITERIA, sample_candidate, sample_job
@@ -220,3 +220,57 @@ async def test_saving_retries_a_database_blip(fakes, monkeypatch):
     state.session.close()
     await ctx.shut_down()
     assert len(attempts) == 2
+
+
+async def test_a_screening_agent_listens_for_a_machine_first(fakes):
+    log, state = fakes
+    await agent_module.entrypoint(FakeCtx(metadata()))
+    assert state.session.agent._detect_machine is not None
+
+
+class FakeAMD:
+    """Stands in for livekit.agents.AMD: returns `category`, or raises `error`."""
+
+    category = AMDCategory.HUMAN
+    error: Exception | None = None
+    kwargs: dict = {}
+
+    def __init__(self, session, **kwargs):
+        FakeAMD.kwargs = kwargs
+
+    async def __aenter__(self):
+        if self.error is not None:
+            raise self.error
+        return self
+
+    async def __aexit__(self, *exc):
+        return None
+
+    async def execute(self):
+        return AMDPredictionEvent(
+            speech_duration=1.0, category=self.category, reason="test", transcript="", delay=0.0
+        )
+
+
+@pytest.mark.parametrize(
+    ("category", "machine"),
+    [
+        (AMDCategory.MACHINE_VM, True),
+        (AMDCategory.MACHINE_UNAVAILABLE, True),
+        (AMDCategory.MACHINE_IVR, True),
+        (AMDCategory.HUMAN, False),
+        (AMDCategory.UNCERTAIN, False),  # unsure: greet, never hang up on a person
+    ],
+)
+async def test_answering_machine_verdicts(monkeypatch, category, machine):
+    monkeypatch.setattr(FakeAMD, "category", category)
+    monkeypatch.setattr(agent_module, "AMD", FakeAMD)
+    assert await agent_module.answered_by_machine(object()) is machine
+    assert FakeAMD.kwargs["ivr_detection"] is False
+    assert (FakeAMD.kwargs["llm"], FakeAMD.kwargs["stt"]) == (None, None)
+
+
+async def test_a_failing_detector_greets_as_if_a_person_answered(monkeypatch):
+    monkeypatch.setattr(FakeAMD, "error", ValueError("AMD classifier could not be resolved"))
+    monkeypatch.setattr(agent_module, "AMD", FakeAMD)
+    assert await agent_module.answered_by_machine(object()) is False

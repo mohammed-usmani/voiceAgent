@@ -58,6 +58,32 @@ async def test_the_disclosure_cannot_be_interrupted(monkeypatch):
     assert said == [(greeting(JOB, CANDIDATE), False)]
 
 
+async def test_a_machine_hears_nothing_and_the_call_ends():
+    # Review focus 5: voicemail answers. No greeting, nothing generated, so no message is
+    # left on it; the call ends as voicemail.
+    async def machine() -> bool:
+        return True
+
+    model = ScriptedLLM(["This must never be said."])
+    hung_up = []
+    agent = make_agent(model, detect_machine=machine, hang_up=lambda: hung_up.append(True))
+    result = await run_text_call(agent, model, [])
+    assert result.outcome == CallOutcome("voicemail")
+    assert result.transcript == []
+    assert model.requests == []
+    assert hung_up == [True]
+
+
+async def test_a_person_is_greeted_once_detection_says_so():
+    async def person() -> bool:
+        return False
+
+    model = ScriptedLLM([])
+    result = await run_text_call(make_agent(model, detect_machine=person), model, [])
+    assert texts(result) == [greeting(JOB, CANDIDATE)]
+    assert result.outcome is None
+
+
 async def test_declined_consent_ends_the_call_after_the_goodbye():
     model = ScriptedLLM(
         [

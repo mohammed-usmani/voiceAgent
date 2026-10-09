@@ -275,3 +275,15 @@ def test_queue_call_numbers_the_attempt_and_queues_the_dial(session):
         "by": "campaign",
         "reason": "retry",
     }
+
+
+def test_a_voicemail_is_saved_as_unanswered_and_not_assessed(engine, session):
+    # Review focus 5: the campaign retries it later; there is nothing to assess.
+    call = a_call(session)
+    finish_call(make_sessionmaker(engine), call.id, CallOutcome("voicemail"), [])
+    session.expire_all()
+    c = session.get(Call, call.id)
+    assert (c.status, c.end_reason, c.consent_given) == ("voicemail", "voicemail", None)
+    assert c.ended_at is not None
+    assert session.get(Candidate, c.candidate_id).status == "no_answer"
+    assert session.scalars(select(Task)).all() == []  # no postcall

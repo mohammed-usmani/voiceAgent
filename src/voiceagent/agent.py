@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 from livekit import agents
-from livekit.agents import Agent, AgentServer, AgentSession, JobContext, inference, room_io
+from livekit.agents import AMD, Agent, AgentServer, AgentSession, JobContext, inference, room_io
 from livekit.agents.voice.events import CloseEvent, CloseReason
 from livekit.plugins import cartesia, deepgram, noise_cancellation, silero
 
@@ -128,6 +128,34 @@ def room_options() -> room_io.RoomOptions:
     )
 
 
+# Answering-machine detection. Detection starts once the agent has joined, after pickup,
+# so a person's first "Hello?" may already be over: silence this long means "unsure",
+# which greets, rather than LiveKit's 10 s default. TIMEOUT caps the wait for a verdict.
+AMD_NO_SPEECH_S = 3.0
+AMD_TIMEOUT_S = 8.0
+
+
+async def answered_by_machine(session: AgentSession) -> bool:
+    """LiveKit's answering-machine detection on what the line says after pickup: True for
+    voicemail or an automated menu. Unsure, or detection failing, counts as a person, so a
+    candidate is never hung up on for it."""
+    try:
+        async with AMD(
+            session,
+            llm=None,  # the session's own LLM and STT: no extra provider
+            stt=None,
+            ivr_detection=False,  # never navigate a phone menu: hang up on it
+            suppress_compatibility_warning=True,
+            detection_options={"no_speech_threshold": AMD_NO_SPEECH_S, "timeout": AMD_TIMEOUT_S},
+        ) as detector:
+            result = await detector.execute()
+    except Exception:
+        logger.exception("answering-machine detection failed; greeting as if a person answered")
+        return False
+    logger.info("answering-machine detection: %s (%s)", result.category.value, result.reason)
+    return result.is_machine
+
+
 # How long the shutdown save waits for the session's own close (so the last reply is in
 # the history), and the pause between attempts to save through a database blip.
 CLOSE_WAIT_S = 10.0
@@ -242,6 +270,7 @@ async def entrypoint(ctx: JobContext) -> None:
             greeting=greeting(job, loaded.candidate),
             timezone=job.timezone,
             hang_up=session.shutdown,
+            detect_machine=lambda: answered_by_machine(session),
         )
         save_on_shutdown(ctx, session, agent, call_id)
         try:

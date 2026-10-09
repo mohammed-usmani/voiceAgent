@@ -3,7 +3,7 @@ conversation its prompt describes, with one tool, end_call."""
 
 import json
 import uuid
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, date, datetime, timedelta
 from typing import Literal
 from zoneinfo import ZoneInfo
@@ -53,6 +53,7 @@ class ScreeningAgent(ReliableAgent):
         hang_up: Callable[[], object] | None = None,
         backup: llm.LLM | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        detect_machine: Callable[[], Awaitable[bool]] | None = None,
     ) -> None:
         super().__init__(instructions=instructions, backup=backup)
         self.greeting = greeting
@@ -61,8 +62,22 @@ class ScreeningAgent(ReliableAgent):
         self._tz = ZoneInfo(timezone)
         self._hang_up = hang_up
         self._clock = clock
+        # Listens to the line before the greeting: True when a machine answered (agent.py
+        # runs LiveKit's answering-machine detection). None: always greet (text mode).
+        self._detect_machine = detect_machine
 
     async def on_enter(self) -> None:
+        if self._detect_machine is not None:
+            if await self._detect_machine():
+                # Voicemail or an automated menu: leave no message, just hang up; a
+                # campaign tries again later.
+                self.outcome = CallOutcome("voicemail")
+                if self._hang_up is not None:
+                    self._hang_up()
+                return
+            # A reply to a "Hello?" heard while listening must not come before the
+            # disclosure.
+            await self.session.interrupt(force=True)
         # Fixed text, so no LLM: the AI and recording disclosure is said word for word on
         # every call, and the first words come without model latency. Uninterruptible: a
         # "Hello?" over it must not cut the disclosure short, since the prompt tells the
