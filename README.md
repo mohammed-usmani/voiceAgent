@@ -43,26 +43,41 @@ numbers will be re-measured.
 
 ### Screening evaluation
 
-First run of `uv run screening-eval` on 2026-10-09: 6 reference jobs, 4 simulated candidates
-each plus 4 fairness replays, real models on Together AI, $0.10 in total. The run finished
-without hitting its budget. Most calls ended after only 1-3 candidate turns (3.25 on
-average, against 6-8 questions per job), so most were sent to review instead of decided:
-read the call-stage numbers below as a first look at a harness that needs tuning, not as
-the agent's quality.
+`uv run screening-eval` on 2026-10-09: 6 reference jobs, 4 simulated candidates each plus
+4 fairness replays, real models on Together AI, $0.37 in total. One persona was refused
+before its call (the generated résumé didn't show the number it was meant to test).
 
 | Stage | Result |
 |---|---|
-| Criteria generation | recall 0.84, precision 0.66, hard flags 0.81, rules 0.83, illegal lines dropped 1.00 |
-| Answer capture | 0.47 of answers extracted correctly; 1.47 questions missed and 0 re-asked per call |
-| Decisions | accuracy 0.20; false rejections 0.00; sent to review 0.90 |
-| Conversation | asked all required questions 0.63 (lowest); every other check at or above 0.88 |
-| Messages | professional 1.00; rejections without reasons: no rejection was sent in this run (2 messages, both invites) |
-| Reviewer | caught 0 wrong rejections and 0 wrong invites; 3 + 0 needless escalations (and 2 wrong invites let through) |
-| Calibration | accuracy 0.27 → 0.27 with recruiter overrides (11 calls) |
-| Fairness | fail: the four names did not get the same decision (3 needs_review, 1 suitable); score spread not computable (3 of 4 unscored) |
-| Cost | $0.003 and 3.25 candidate turns per call |
+| Criteria generation | recall 0.84, precision 0.68, hard flags 0.83, rules 0.69, illegal lines dropped 0.33 |
+| Answer capture | 1.00 of answers extracted correctly; 0.05 questions missed and 0 re-asked per call |
+| Decisions | clear fits 6/6 suitable, must-have misses 5/5 not suitable, false rejections 0; accuracy 0.67, sent to review 0.29 |
+| Conversation | disclosed AI and recording 0.96, asked all required questions 0.91, never hinted a decision or promised anything 1.00 |
+| Messages | professional, no promises, rejections without reasons: all 1.00 (15 messages) |
+| Reviewer | caught 3 of 7 wrong invites, 1 needless escalation; no wrong rejection reached it |
+| Calibration | borderline candidates matched the recruiter's decision 0.83 → 1.00 with overrides; clear fits 1.00 → 0.83 (one went to review) |
+| Fairness | fail: same words, different scores (see below) |
+| Cost | $0.013 per call |
 
-Scale: one run, 24 personas; these are measurements, not a benchmark.
+What the misses are:
+
+- **Borderline candidates.** They are told to give middling answers; the scorer often
+  rates those answers above the pass mark, so 4 of 6 came out suitable where the label
+  says a recruiter should decide. Their recruiter overrides call them suitable too.
+- **Fairness.** The four name-swapped replays gave the same answer to "tell me about an
+  upset customer" word for word; it scored 0.5 twice and 1.0 twice at temperature 0, with
+  no pattern by name across runs (the previous run split 3 to 1 differently). That is
+  scorer noise, and it decides between suitable and review on this borderline persona.
+  A fairness check on one persona can't tell noise from bias; scoring each soft answer
+  more than once would.
+
+Getting here took six runs, and most fixes were in the agents, not the harness: the voice
+model (Qwen3.5-9B) was ending calls before the questions were done; the reviewer's yes/no
+contradicted its own notes and it never saw the job's own wording; "a 60-day notice" and
+"no experience" weren't read as numbers.
+
+Scale: one run, 27 simulated calls (23 personas and 4 fairness replays); these are
+measurements, not a benchmark.
 
 ## Turn-taking
 
