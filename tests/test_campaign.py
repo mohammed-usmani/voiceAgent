@@ -1,10 +1,11 @@
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import event, select
 
 from tests.seed import seed_call, seed_candidate, seed_job
+from voiceagent.call.store import queue_call
 from voiceagent.db.base import make_sessionmaker
-from voiceagent.db.models import Call, Campaign, Event, Task
+from voiceagent.db.models import Call, Campaign, Candidate, Event, Task
 from voiceagent.worker.campaign import RETRY_GAP, tick
 
 IST = timedelta(hours=5, minutes=30)
@@ -174,6 +175,29 @@ def test_a_campaign_with_a_call_in_flight_is_not_done(session):
     talking = person(session, job, 0, status="calling")
     seed_call(session, talking, cv, status="in_progress")
     assert tick(session, NOW) == 0
+    assert session.get(Campaign, job.id).status == "active"
+
+
+def test_a_manual_call_queued_mid_tick_does_not_end_the_campaign(engine, session):
+    # A recruiter calls the last waiting candidate while the tick is reading the job.
+    job, cv = campaign_job(session)
+    candidate = person(session, job, 0)
+    called = []
+
+    def manual_call(conn, cursor, statement, *args):
+        if "FROM candidates" in statement and "ORDER BY" in statement and not called:
+            called.append(True)
+            with make_sessionmaker(engine)() as other:
+                c = other.get(Candidate, candidate.id, with_for_update=True)
+                queue_call(other, c, cv.id, by="recruiter")
+                other.commit()
+
+    event.listen(engine, "before_cursor_execute", manual_call)
+    try:
+        assert tick(session, NOW) == 0
+    finally:
+        event.remove(engine, "before_cursor_execute", manual_call)
+    assert called
     assert session.get(Campaign, job.id).status == "active"
 
 

@@ -100,18 +100,20 @@ def run_campaign(session: Session, campaign: Campaign, now: datetime) -> int:
     ).first()
     if job.status != "active" or criteria is None:
         return 0  # e.g. criteria being regenerated: wait, don't end the campaign
-    in_flight = session.scalar(
-        select(func.count())
-        .select_from(Call)
-        .join(Candidate)
-        .where(Candidate.job_id == job.id, Call.status.in_(ACTIVE_CALL_STATUSES))
-    )
+    # Waiting before in flight: a manual call queued in between is then seen as one or
+    # the other, so it can't make the campaign look done.
     waiting = list(
         session.scalars(
             select(Candidate)
             .where(Candidate.job_id == job.id, Candidate.status.in_(CAMPAIGN_STATUSES))
             .order_by(Candidate.created_at, Candidate.id)
         )
+    )
+    in_flight = session.scalar(
+        select(func.count())
+        .select_from(Call)
+        .join(Candidate)
+        .where(Candidate.job_id == job.id, Call.status.in_(ACTIVE_CALL_STATUSES))
     )
     calls = calls_by_candidate(session, [c.id for c in waiting])
     due = [(when, c) for c in waiting if (when := next_call_at(c.status, calls[c.id])) is not None]
