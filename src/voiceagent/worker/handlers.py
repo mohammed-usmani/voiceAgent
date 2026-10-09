@@ -81,7 +81,14 @@ def generate_criteria_failed(session: Session, payload: dict, error: str) -> Non
     emit(session, "job", job.id, "criteria_failed", {"error": error[:500]})
 
 
+def postcall(session: Session, models: Models, task: Task) -> None:
+    """The assessment agent arrives in milestone 3; until then a finished call is only
+    announced, so the task doesn't fail as an unknown kind."""
+    emit(session, "call", task.payload["call_id"], "awaiting_assessment")
+
+
 HANDLERS = {
     "generate_criteria": (generate_criteria, generate_criteria_failed),
     "dial": (dial, dial_failed),
+    "postcall": (postcall, None),
 }
