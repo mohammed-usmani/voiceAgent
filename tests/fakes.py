@@ -110,3 +110,10 @@ class FakeMailer:
         if self.error is not None:
             raise self.error
         self.sent.append(email)
+
+
+def flagged(finding: str, requirement_id: str = "python_years"):
+    """A reviewer check that doesn't support its reason's verdict."""
+    from voiceagent.agents.assessment import ReasonCheck
+
+    return ReasonCheck(requirement_id=requirement_id, finding=finding, supported=False)

@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy import select, update
 
-from tests.fakes import FakeModels
+from tests.fakes import FakeModels, flagged
 from tests.seed import TRANSCRIPT, seed_call, seed_decision, seed_finished_call, seed_message
 from voiceagent.agents.assessment import Evidence, EvidenceSet, Review, SoftScore, SoftScores
 from voiceagent.agents.messages import Flag, InviteCheck, Letter, RejectionCheck
@@ -53,7 +53,7 @@ def replies(python=5.0, salary_score=0.8, letter=INVITE, check=None):
                 ]
             )
         ],
-        Review: [Review(check="ok", problems=[])],
+        Review: [Review(checks=[])],
         Letter: [letter],
         InviteCheck: [check or InviteCheck()],
         RejectionCheck: [RejectionCheck()],
@@ -108,7 +108,7 @@ def test_a_suitable_candidate_is_invited_automatically(engine, session, mailer):
 def test_an_invite_the_reviewer_doubts_is_not_sent_unattended(engine, session, mailer):
     postcall(session)
     models = FakeModels(replies())
-    models.replies[Review] = [Review(check="checked", problems=["the salary answer was hedged"])]
+    models.replies[Review] = [Review(checks=[flagged("the salary answer was hedged")])]
     drain(engine, models)
     session.expire_all()
     d = session.scalars(select(Decision)).one()

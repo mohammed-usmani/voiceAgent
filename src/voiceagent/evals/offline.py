@@ -120,8 +120,9 @@ class OfflineModels:
             data = {"pairs": [{"generated_id": r.id, "labelled_id": r.id} for r in reqs]}
         elif name == "PersonaDraft":
             middling = "middling" in system
+            guidance = user.split("Résumé: ", 1)[1].split("\n", 1)[0]
             data = {
-                "resume": f"{self.job.title} candidate with several years of relevant work.",
+                "resume": f"{self.job.title} candidate with relevant work; {guidance}",
                 "soft_answers": [
                     {"requirement_id": r.id, "value": _soft_value(r, middling)}
                     for r in reqs
@@ -146,7 +147,7 @@ class OfflineModels:
                 ]
             }
         elif name == "Review":
-            data = {"check": "", "problems": []}
+            data = {"checks": []}
         elif name == "Letter":
             first = p.name.split()[0] if p else "there"
             news = (

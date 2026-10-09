@@ -70,14 +70,17 @@ class SoftScores(BaseModel):
     scores: list[SoftScore]
 
 
+class ReasonCheck(BaseModel):
+    requirement_id: str
+    finding: str = Field(description="what the transcript and résumé show for this reason")
+    supported: bool = Field(description="the evidence clearly supports this reason's verdict")
+
+
 class Review(BaseModel):
-    # Reasoning before the verdict, and the verdict derived in code: with a bare `agree`
-    # first, the model disagreed and then wrote "the verdict is correct".
-    check: str = Field(description="briefly, each reason checked against the transcript")
-    problems: list[str] = Field(
-        description="each reason whose verdict the evidence doesn't clearly support, with "
-        "the requirement id and what a recruiter should check; empty if every reason holds"
-    )
+    # One check per reason, its finding before its yes/no, and the overall verdict derived
+    # in code: a bare `agree`, and later a free-text problem list, both came back
+    # contradicting their own words ("No problem." filed as a problem).
+    checks: list[ReasonCheck]
 
 
 @dataclass
@@ -148,10 +151,9 @@ Could the answer have been misheard by the transcription? Did the candidate qual
 correct the answer later in the call? Is a rule applied to the wrong value or unit? Is it
 borderline? Does an answer contradict the résumé (say, more years than it shows) without
 the call settling which is right?
-List a problem only for a reason whose verdict the evidence doesn't clearly support. A
-reason you confirmed is not a problem: leave it out, and leave the list empty if every
-reason holds. Any problem sends the candidate to a recruiter; it never accepts or rejects
-anyone."""
+Check every reason: say what the evidence shows, then whether it clearly supports that
+reason's verdict. Any unsupported reason sends the candidate to a recruiter; it never
+accepts or rejects anyone."""
     + DATA
 )
 
@@ -420,9 +422,10 @@ def run_assessment(
             + f"\n\nTranscript:\n{convo}\n\n{resume_block}"
         )
         out = reviewer.structured(Review, REVIEWER, user)
+        problems = [f"{c.requirement_id}: {c.finding}" for c in out.checks if not c.supported]
         agent_review = {
-            "agree": not out.problems,
-            "notes": "; ".join(out.problems),
+            "agree": not problems,
+            "notes": "; ".join(problems),
             "challenged": state["result"],
             "model": reviewer.name,
         }
@@ -430,7 +433,7 @@ def run_assessment(
             "agent_review": agent_review,
             "trace": [{"step": "review", **agent_review}],
         }
-        if out.problems:
+        if problems:
             update["result"] = "needs_review"
             update["summary"] = [
                 *state["summary"],

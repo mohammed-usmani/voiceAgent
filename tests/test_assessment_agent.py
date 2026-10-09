@@ -1,10 +1,11 @@
 import pytest
 
-from tests.fakes import FakeModels
+from tests.fakes import FakeModels, flagged
 from tests.seed import CRITERIA, TRANSCRIPT
 from voiceagent.agents.assessment import (
     Evidence,
     EvidenceSet,
+    ReasonCheck,
     Review,
     SoftScore,
     SoftScores,
@@ -76,7 +77,7 @@ def test_clear_fit_is_suitable_without_a_review():
 
 
 def test_failed_must_have_is_challenged_by_the_reviewer_model():
-    reviewer = FakeModels({Review: [Review(check="ok", problems=[])]})
+    reviewer = FakeModels({Review: [Review(checks=[])]})
     reviewer.name = "reviewer"
     models = FakeModels(
         {EvidenceSet: [evidence(python=2.0, py_quote=TWO_QUOTE)], SoftScores: [scores(0.9)]},
@@ -99,13 +100,13 @@ def test_a_reviewer_who_disagrees_sends_it_to_a_human_never_to_suitable():
         {
             EvidenceSet: [evidence(python=2.0, py_quote=TWO_QUOTE)],
             SoftScores: [scores(0.9)],
-            Review: [Review(check="checked", problems=["he said 'two' but later 'five'"])],
+            Review: [Review(checks=[flagged("he said 'two' but later 'five'")])],
         }
     )
     a = assess(models, transcript=TWO_CALL)
     assert a.result == "needs_review"
     assert a.agent_review["agree"] is False and a.agent_review["challenged"] == "not_suitable"
-    assert "The reviewer disagreed: he said 'two' but later 'five'" in a.summary
+    assert "The reviewer disagreed: python_years: he said 'two' but later 'five'" in a.summary
 
 
 def test_a_quote_that_is_not_the_candidates_words_decides_nothing():
@@ -115,7 +116,7 @@ def test_a_quote_that_is_not_the_candidates_words_decides_nothing():
         {
             EvidenceSet: [evidence(python=2.0, py_quote=agent_words)],
             SoftScores: [scores(0.9)],
-            Review: [Review(check="ok", problems=[])],
+            Review: [Review(checks=[])],
         }
     )
     a = assess(models)
@@ -145,7 +146,7 @@ def test_low_confidence_must_have_is_unknown():
         {
             EvidenceSet: [evidence(python=5.0, py_conf=0.4)],
             SoftScores: [scores(0.9)],
-            Review: [Review(check="ok", problems=[])],
+            Review: [Review(checks=[])],
         }
     )
     a = assess(models)
@@ -172,7 +173,7 @@ def test_score_just_under_the_pass_mark_needs_review():
         {
             EvidenceSet: [evidence()],
             SoftScores: [scores(0.55)],
-            Review: [Review(check="ok", problems=[])],
+            Review: [Review(checks=[])],
         }
     )
     assert assess(models).result == "needs_review"
@@ -183,7 +184,7 @@ def test_low_score_is_not_suitable():
         {
             EvidenceSet: [evidence()],
             SoftScores: [scores(0.2)],
-            Review: [Review(check="ok", problems=[])],
+            Review: [Review(checks=[])],
         }
     )
     a = assess(models)
@@ -205,9 +206,7 @@ def test_an_unfinished_call_is_never_an_automatic_rejection(end_reason):
 def test_a_requirement_the_model_skipped_is_unknown():
     ev = evidence()
     ev.answers = ev.answers[1:]  # nothing for python_years
-    models = FakeModels(
-        {EvidenceSet: [ev], SoftScores: [scores(0.8)], Review: [Review(check="ok", problems=[])]}
-    )
+    models = FakeModels({EvidenceSet: [ev], SoftScores: [scores(0.8)], Review: [Review(checks=[])]})
     a = assess(models)
     assert (a.reasons[0]["verdict"], a.reasons[0]["confidence"]) == ("unknown", 0.0)
     assert a.result == "needs_review"
@@ -242,7 +241,7 @@ def test_a_soft_score_quoting_words_never_said_is_challenged():
         {
             EvidenceSet: [evidence()],
             SoftScores: [scores(0.9, quote="I want 20 lakhs")],
-            Review: [Review(check="checked", problems=["salary quote isn't in the call"])],
+            Review: [Review(checks=[flagged("salary quote isn't in the call")])],
         }
     )
     a = assess(models)
@@ -285,7 +284,7 @@ def test_a_soft_score_on_an_unverified_quote_never_rejects_even_if_the_reviewer_
             {
                 EvidenceSet: [evidence()],
                 SoftScores: [scores(0.0, quote=quote)],
-                Review: [Review(check="ok", problems=[])],
+                Review: [Review(checks=[])],
             }
         )
         a = assess(models)
@@ -315,7 +314,7 @@ def test_a_hard_failure_still_rejects_when_soft_evidence_is_missing():
         {
             EvidenceSet: [evidence(python=2.0, py_quote=TWO_QUOTE)],
             SoftScores: [SoftScores(scores=[])],
-            Review: [Review(check="ok", problems=[])],
+            Review: [Review(checks=[])],
         }
     )
     assert assess(models, transcript=TWO_CALL).result == "not_suitable"
@@ -326,7 +325,7 @@ def test_a_suitable_result_that_would_be_sent_unattended_is_reviewed():
         {
             EvidenceSet: [evidence()],
             SoftScores: [scores(0.8)],
-            Review: [Review(check="checked", problems=["the salary answer was hedged"])],
+            Review: [Review(checks=[flagged("the salary answer was hedged")])],
         }
     )
     a = assess(models, auto_send=True)
@@ -340,7 +339,7 @@ def test_a_number_that_is_not_in_its_quote_decides_nothing():
         {
             EvidenceSet: [evidence(python=8.0)],
             SoftScores: [scores(0.9)],
-            Review: [Review(check="ok", problems=[])],
+            Review: [Review(checks=[])],
         }
     )
     a = assess(models)
@@ -355,7 +354,7 @@ def test_months_quoted_for_a_value_in_years_still_count():
         {
             EvidenceSet: [evidence(python=1.5, py_quote="About 18 months of Python.")],
             SoftScores: [scores(0.9)],
-            Review: [Review(check="ok", problems=[])],
+            Review: [Review(checks=[])],
         }
     )
     a = assess(models, transcript=transcript)
@@ -369,7 +368,7 @@ def test_the_candidates_words_are_fenced_as_data_in_every_prompt():
         {
             EvidenceSet: [evidence(python=2.0, py_quote=TWO_QUOTE)],
             SoftScores: [scores(0.9)],
-            Review: [Review(check="ok", problems=[])],
+            Review: [Review(checks=[])],
         }
     )
     assess(models, transcript=[*TWO_CALL, transcript[-1]])
@@ -381,14 +380,14 @@ def test_the_candidates_words_are_fenced_as_data_in_every_prompt():
     assert "<resume>" in models.prompts[0][2]
 
 
-def test_the_reviewers_problems_not_its_wording_decide_whether_it_disagrees():
-    # It once flagged disagreement and then wrote "the verdict is correct"; now only a
-    # listed problem sends the candidate to a recruiter.
-    agreeing = Review(check="2 years vs >= 3: the fail is correct", problems=[])
-    disagreeing = Review(check="checked", problems=["python_years: 'two' or 'five'?", "salary"])
+def test_only_an_unsupported_check_makes_the_reviewer_disagree():
+    # It once flagged disagreement and then wrote "the verdict is correct"; now each reason
+    # gets its own finding and yes/no, and only a "no" sends the candidate to a recruiter.
+    ok = ReasonCheck(requirement_id="python_years", finding="2 vs >= 3: correct", supported=True)
+    disagreeing = Review(checks=[ok, flagged("'two' or 'five'?"), flagged("hedged", "salary")])
     for review, result, notes in [
-        (agreeing, "not_suitable", ""),
-        (disagreeing, "needs_review", "python_years: 'two' or 'five'?; salary"),
+        (Review(checks=[ok]), "not_suitable", ""),
+        (disagreeing, "needs_review", "python_years: 'two' or 'five'?; salary: hedged"),
     ]:
         models = FakeModels(
             {
