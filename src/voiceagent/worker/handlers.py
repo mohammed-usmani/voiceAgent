@@ -12,6 +12,7 @@ from voiceagent.db.models import CriteriaVersion, Job, Task
 from voiceagent.events import emit
 from voiceagent.knowledge.store import similar_criteria
 from voiceagent.llm import Models
+from voiceagent.worker.assess import draft_message, draft_message_failed, postcall, postcall_failed
 from voiceagent.worker.dial import dial, dial_failed
 from voiceagent.worker.queue import heartbeat
 from voiceagent.worker.send import send_message, send_message_failed
@@ -82,15 +83,10 @@ def generate_criteria_failed(session: Session, payload: dict, error: str) -> Non
     emit(session, "job", job.id, "criteria_failed", {"error": error[:500]})
 
 
-def postcall(session: Session, models: Models, task: Task) -> None:
-    """The assessment agent arrives in milestone 3; until then a finished call is only
-    announced, so the task doesn't fail as an unknown kind."""
-    emit(session, "call", task.payload["call_id"], "awaiting_assessment")
-
-
 HANDLERS = {
     "generate_criteria": (generate_criteria, generate_criteria_failed),
     "dial": (dial, dial_failed),
-    "postcall": (postcall, None),
+    "postcall": (postcall, postcall_failed),
+    "draft_message": (draft_message, draft_message_failed),
     "send_message": (send_message, send_message_failed),
 }

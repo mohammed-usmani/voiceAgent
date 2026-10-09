@@ -6,7 +6,6 @@ from zoneinfo import ZoneInfo
 import pytest
 from sqlalchemy import event, select, update
 
-from tests.fakes import FakeModels
 from tests.seed import seed_call, seed_candidate, seed_job
 from voiceagent.call.store import (
     MAX_CALL_MINUTES,
@@ -18,8 +17,6 @@ from voiceagent.call.store import (
 )
 from voiceagent.db.base import make_sessionmaker
 from voiceagent.db.models import Call, Candidate, Event, Task
-from voiceagent.worker.main import run_once
-from voiceagent.worker.queue import enqueue
 
 TURNS = [
     {"role": "agent", "text": "Hi Priya", "at": "2026-10-09T09:00:00+00:00"},
@@ -133,16 +130,6 @@ def test_fail_call_lets_the_candidate_be_called_again(engine, session):
     c = session.get(Call, call.id)
     assert (c.status, c.end_reason, c.error) == ("failed", "error", "LookupError('no criteria')")
     assert session.get(Candidate, c.candidate_id).status == "pending"
-
-
-def test_postcall_task_is_handled(engine, session):
-    call = a_call(session, status="completed")
-    enqueue(session, "postcall", {"call_id": str(call.id)})
-    session.commit()
-    assert run_once(make_sessionmaker(engine), FakeModels()) is True
-    session.expire_all()
-    assert session.scalars(select(Task)).one().status == "done"
-    assert "awaiting_assessment" in [e.type for e in session.scalars(select(Event))]
 
 
 def age(session, call, minutes):
