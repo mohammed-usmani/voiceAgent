@@ -146,7 +146,8 @@ REVIEWER = (
 each reason, check the transcript: does the quoted evidence really support the verdict?
 Could the answer have been misheard by the transcription? Did the candidate qualify or
 correct the answer later in the call? Is a rule applied to the wrong value or unit? Is it
-borderline?
+borderline? Does an answer contradict the résumé (say, more years than it shows) without
+the call settling which is right?
 List a problem only for a reason whose verdict the evidence doesn't clearly support. A
 reason you confirmed is not a problem: leave it out, and leave the list empty if every
 reason holds. Any problem sends the candidate to a recruiter; it never accepts or rejects

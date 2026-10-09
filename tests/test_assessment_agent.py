@@ -399,3 +399,9 @@ def test_the_reviewers_problems_not_its_wording_decide_whether_it_disagrees():
         )
         a = assess(models, transcript=TWO_CALL)
         assert (a.result, a.agent_review["notes"]) == (result, notes)
+
+
+def test_the_reviewer_checks_answers_against_the_resume():
+    from voiceagent.agents.assessment import REVIEWER
+
+    assert "contradict the résumé" in REVIEWER
