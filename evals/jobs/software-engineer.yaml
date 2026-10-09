@@ -1,0 +1,89 @@
+title: Backend Software Engineer
+company: Kestrel Pay
+description: |
+  Kestrel Pay is a Bengaluru-based payments company that processes UPI and card payments
+  for over 40,000 small merchants across India. We are hiring a Backend Software Engineer
+  to join our Settlements team.
+
+  What you will do:
+  - Build and run the Python services that move money from customers to merchants every day.
+  - Design PostgreSQL schemas and write the SQL behind our reconciliation reports.
+  - Review code, write tests and share an on-call rotation (one week in six).
+  - Work with product and finance to turn settlement rules into reliable software.
+
+  What we are looking for:
+  - 3-6 years of professional experience building backend services in Python.
+  - Strong SQL: you are comfortable writing joins, window functions and tuning slow queries.
+  - Experience designing APIs that other teams depend on.
+  - Payments or fintech experience is a plus, not a requirement.
+
+  Work setup: hybrid, 3 days a week from our Koramangala office in Bengaluru.
+  We can only consider candidates with a notice period of 60 days or less.
+
+  Compensation: 18-28 LPA depending on experience, plus ESOPs. Interview process: a
+  30-minute screening call, a take-home exercise, two technical rounds and a final
+  conversation with the engineering manager.
+notes: ""
+criteria:
+  pass_threshold: 0.6
+  requirements:
+    - id: python_years
+      label: Backend Python experience
+      kind: number
+      unit: years
+      question: How many years have you worked professionally on backend services in Python?
+      hard: true
+      rule: {op: ">=", value: 3}
+      source: 3-6 years of professional experience building backend services in Python
+    - id: hybrid_bengaluru
+      label: Hybrid from the Bengaluru office
+      kind: boolean
+      question: Would coming into our Koramangala office three days a week work for you?
+      hard: true
+      rule: {op: "==", value: true}
+      disclose: true
+      source: hybrid, 3 days a week from our Koramangala office in Bengaluru
+    - id: notice_days
+      label: Notice period
+      kind: number
+      unit: days
+      question: What is your notice period, in days?
+      hard: true
+      rule: {op: "<=", value: 60}
+      source: a notice period of 60 days or less
+    - id: sql_depth
+      label: SQL depth
+      kind: text
+      question: Can you tell me about a slow SQL query you tuned, and what you changed?
+      weight: 0.45
+      rubric: Names a concrete query problem and a concrete fix (an index, rewriting a join, a window function, reading the query plan).
+      source: "Strong SQL: you are comfortable writing joins, window functions and tuning slow queries"
+    - id: api_design
+      label: API design
+      kind: text
+      question: Tell me about an API you designed that other teams used.
+      weight: 0.45
+      rubric: Describes an API they designed, who used it, and at least one design decision such as versioning, idempotency or error handling.
+      source: Experience designing APIs that other teams depend on
+    - id: expected_ctc
+      label: Expected salary
+      kind: number
+      unit: LPA
+      question: What annual salary are you expecting, in lakhs?
+      weight: 0.1
+      sensitive: true
+      source: 18-28 LPA depending on experience
+  job_facts:
+    summary: Build the Python services and SQL behind Kestrel Pay's merchant settlements. The team runs a one-week-in-six on-call rotation.
+    location: Koramangala, Bengaluru
+    work_mode: Hybrid, 3 days a week in the office
+    interview_process: A take-home exercise, two technical rounds and a final conversation with the engineering manager
+    salary_band: 18-28 LPA plus ESOPs
+illegal: []
+overrides:
+  - requirement_id: sql_depth
+    quote: I added an index on the merchant id column and the report went from two minutes to five seconds.
+    agent_score: 0.5
+    agent_result: needs_review
+    recruiter_result: suitable
+    note: A concrete index fix with a measured result is exactly the depth we want.

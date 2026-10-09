@@ -1,0 +1,88 @@
+title: Customer Support Associate, International Voice
+company: Brightline Support Services
+description: |
+  Brightline Support Services handles customer care for a US-based consumer electronics
+  brand from our centre in HITEC City, Hyderabad. Associates take inbound calls from US
+  customers about orders, returns and basic troubleshooting.
+
+  What the job involves:
+  - Answer 60-70 inbound calls per shift and resolve most issues on the first call.
+  - Guide customers through simple troubleshooting steps for routers and smart speakers.
+  - Log every interaction in Salesforce Service Cloud.
+  - Stay calm and polite with frustrated customers and escalate when needed.
+
+  Who we are looking for:
+  - Any graduate; freshers with excellent spoken English are welcome.
+  - Must be comfortable working night shifts aligned to US hours (6:30 pm to 3:30 am IST).
+  - Able to join within 15 days of an offer.
+  - Prior experience in an international voice process is an advantage.
+
+  Pay and benefits: 3.2-4.5 LPA plus a night shift allowance, two-way cab, and five days
+  working with two fixed weekly offs. Hiring process: a phone screening, a voice and
+  accent assessment, and an operations round.
+notes: ""
+criteria:
+  pass_threshold: 0.6
+  requirements:
+    - id: graduate
+      label: Graduate
+      kind: boolean
+      question: Have you completed your graduation?
+      hard: true
+      rule: {op: "==", value: true}
+      source: Any graduate; freshers with excellent spoken English are welcome
+    - id: night_shifts
+      label: US night shifts
+      kind: boolean
+      question: The shift is 6:30 pm to 3:30 am IST for US customers. Would night shifts work for you?
+      hard: true
+      rule: {op: "==", value: true}
+      disclose: true
+      source: Must be comfortable working night shifts aligned to US hours (6:30 pm to 3:30 am IST)
+    - id: joining_days
+      label: Time to join
+      kind: number
+      unit: days
+      question: If you got an offer, how many days would you need before you could join?
+      hard: true
+      rule: {op: "<=", value: 15}
+      source: Able to join within 15 days of an offer
+    - id: frustrated_customer
+      label: Handling a frustrated customer
+      kind: text
+      question: Tell me about a time you calmed down an upset customer or friend. What did you do?
+      weight: 0.55
+      rubric: Describes listening, acknowledging the frustration, staying polite, and a concrete step that resolved or escalated the issue.
+      source: Stay calm and polite with frustrated customers and escalate when needed
+    - id: intl_voice_years
+      label: International voice experience
+      kind: number
+      unit: years
+      question: How many years have you worked in an international voice process, if any?
+      weight: 0.35
+      source: Prior experience in an international voice process is an advantage
+    - id: expected_salary
+      label: Expected salary
+      kind: number
+      unit: LPA
+      question: What annual salary are you expecting, in lakhs?
+      weight: 0.1
+      sensitive: true
+      source: 3.2-4.5 LPA plus a night shift allowance
+  job_facts:
+    summary: Take inbound calls from US customers of a consumer electronics brand about orders, returns and basic troubleshooting.
+    location: HITEC City, Hyderabad
+    work_mode: On site, night shift 6:30 pm to 3:30 am IST, five days a week
+    interview_process: A voice and accent assessment and an operations round
+    salary_band: 3.2-4.5 LPA plus night shift allowance
+    other:
+      - Two-way cab
+      - Two fixed weekly offs
+illegal: []
+overrides:
+  - requirement_id: frustrated_customer
+    quote: I let him finish, said sorry for the trouble and arranged a replacement the same day.
+    agent_score: 0.5
+    agent_result: needs_review
+    recruiter_result: suitable
+    note: Listening, apologising and fixing it the same day is the behaviour we hire for.

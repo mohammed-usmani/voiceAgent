@@ -1,0 +1,98 @@
+title: Staff Nurse, ICU
+company: Sevana Hospitals
+description: |
+  Sevana Hospitals is a 350-bed multi-speciality hospital in Velachery, Chennai, accredited
+  by NABH. We are expanding our medical-surgical ICU and are hiring Staff Nurses.
+
+  Your role:
+  - Provide direct care to critically ill patients, including ventilated patients.
+  - Monitor vitals, give medication and keep accurate nursing records in our HIS.
+  - Respond to emergencies and assist doctors during procedures.
+  - Educate patients' families and hand over clearly between shifts.
+
+  Eligibility:
+  - GNM or B.Sc Nursing from a recognised institution.
+  - Valid registration with the Tamil Nadu Nurses and Midwives Council.
+  - Minimum 1 year of ICU experience in a hospital of 100 beds or more.
+  - Willing to work rotating shifts, including nights and weekends.
+  - Basic Life Support certification preferred.
+  - Unmarried candidates preferred as hostel accommodation is provided.
+
+  We offer 3-4.2 LPA depending on experience, free hostel accommodation near the hospital,
+  meals during shifts, and sponsored ACLS training after confirmation. Selection: a phone
+  screening, a clinical skills assessment and an interview with the Nursing Superintendent.
+notes: ""
+criteria:
+  pass_threshold: 0.6
+  requirements:
+    - id: qualification
+      label: Nursing qualification
+      kind: choice
+      options: [GNM, B.Sc Nursing, ANM, Other]
+      question: What is your nursing qualification - GNM, B.Sc Nursing, or something else?
+      hard: true
+      rule: {op: in, value: [GNM, B.Sc Nursing]}
+      source: GNM or B.Sc Nursing from a recognised institution
+    - id: tn_registration
+      label: Tamil Nadu nursing registration
+      kind: boolean
+      question: Do you have a valid registration with the Tamil Nadu Nurses and Midwives Council?
+      hard: true
+      rule: {op: "==", value: true}
+      source: Valid registration with the Tamil Nadu Nurses and Midwives Council
+    - id: icu_years
+      label: ICU experience
+      kind: number
+      unit: years
+      question: How many years have you worked in an ICU?
+      hard: true
+      rule: {op: ">=", value: 1}
+      source: Minimum 1 year of ICU experience in a hospital of 100 beds or more
+    - id: rotating_shifts
+      label: Rotating shifts
+      kind: boolean
+      question: The role has rotating shifts, including nights and weekends. Would that work for you?
+      hard: true
+      rule: {op: "==", value: true}
+      disclose: true
+      source: Willing to work rotating shifts, including nights and weekends
+    - id: ventilator_care
+      label: Ventilated patient care
+      kind: text
+      question: Can you describe how you care for a patient on a ventilator during your shift?
+      weight: 0.65
+      rubric: Mentions concrete checks such as airway and suction, ventilator settings and alarms, vitals and sedation monitoring, and documentation.
+      source: Provide direct care to critically ill patients, including ventilated patients
+    - id: bls
+      label: BLS certification
+      kind: boolean
+      question: Do you have a current Basic Life Support certification?
+      weight: 0.25
+      source: Basic Life Support certification preferred
+    - id: expected_salary
+      label: Expected salary
+      kind: number
+      unit: LPA
+      question: What annual salary are you expecting, in lakhs?
+      weight: 0.1
+      sensitive: true
+      source: We offer 3-4.2 LPA depending on experience
+  job_facts:
+    summary: Care for critically ill patients in Sevana Hospitals' medical-surgical ICU in Chennai, including ventilated patients.
+    location: Velachery, Chennai
+    work_mode: On site, rotating shifts including nights and weekends
+    interview_process: A clinical skills assessment and an interview with the Nursing Superintendent
+    salary_band: 3-4.2 LPA depending on experience
+    other:
+      - Free hostel accommodation near the hospital
+      - Meals during shifts
+      - Sponsored ACLS training after confirmation
+illegal:
+  - Unmarried candidates preferred as hostel accommodation is provided.
+overrides:
+  - requirement_id: ventilator_care
+    quote: I check the settings and alarms every hour, do suction when needed and chart everything.
+    agent_score: 0.5
+    agent_result: needs_review
+    recruiter_result: suitable
+    note: Hourly checks, suction and charting cover the essentials for a staff nurse.

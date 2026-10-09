@@ -21,3 +21,7 @@ KMS/
 
 # Local run logs
 logs/
+
+# Evaluation runs (screening-eval writes them; keep the folder)
+evals/runs/*
+!evals/runs/.gitkeep

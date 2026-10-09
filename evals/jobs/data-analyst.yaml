@@ -1,0 +1,86 @@
+title: Data Analyst
+company: Cartwheel Commerce
+description: |
+  Cartwheel Commerce is an online marketplace for home and kitchen products with over two
+  million monthly shoppers. Our analytics team in Gurugram helps category, marketing and
+  operations teams make decisions with data.
+
+  In this role you will:
+  - Write SQL against our Snowflake warehouse to answer business questions.
+  - Build and maintain dashboards for category managers in Power BI or Tableau.
+  - Analyse A/B tests on the website and app and explain the results to non-technical teams.
+  - Automate recurring reports with Python.
+
+  You should have:
+  - At least 2 years of hands-on SQL experience in an analyst role.
+  - Experience building dashboards in Power BI or Tableau.
+  - Working knowledge of Python (pandas) for data cleaning and analysis.
+  - A good grasp of statistics, especially for experiments.
+
+  Location: Gurugram, hybrid with 3 days a week in the office (Sector 44). The budget for
+  this role is 10-16 LPA. Our process: a screening call, a SQL and case-study test, and two
+  interviews with the analytics team.
+notes: ""
+criteria:
+  pass_threshold: 0.6
+  requirements:
+    - id: sql_years
+      label: Hands-on SQL experience
+      kind: number
+      unit: years
+      question: How many years have you written SQL hands-on in an analyst role?
+      hard: true
+      rule: {op: ">=", value: 2}
+      source: At least 2 years of hands-on SQL experience in an analyst role
+    - id: bi_tool
+      label: Dashboard tool
+      kind: choice
+      options: [Power BI, Tableau, Looker, Other, None]
+      question: Which tool have you built dashboards in - Power BI, Tableau, or something else?
+      hard: true
+      rule: {op: in, value: [Power BI, Tableau]}
+      source: Experience building dashboards in Power BI or Tableau
+    - id: hybrid_gurugram
+      label: Hybrid in Gurugram
+      kind: boolean
+      question: The role is hybrid, three days a week in our Sector 44 office in Gurugram. Would that work for you?
+      hard: true
+      rule: {op: "==", value: true}
+      disclose: true
+      source: Gurugram, hybrid with 3 days a week in the office
+    - id: pandas
+      label: Python and pandas
+      kind: text
+      question: What have you used Python and pandas for in your work?
+      weight: 0.4
+      rubric: Describes real data cleaning or analysis in pandas, such as merges, group-bys, handling missing values, or automating a report.
+      source: Working knowledge of Python (pandas) for data cleaning and analysis
+    - id: ab_testing
+      label: A/B test analysis
+      kind: text
+      question: How would you decide whether an A/B test result is real and not just noise?
+      weight: 0.4
+      rubric: Mentions sample size or power, statistical significance or confidence intervals, and running the test long enough or checking for bias.
+      source: Analyse A/B tests on the website and app and explain the results to non-technical teams
+    - id: expected_ctc
+      label: Expected salary
+      kind: number
+      unit: LPA
+      question: What annual salary are you expecting, in lakhs?
+      weight: 0.2
+      sensitive: true
+      source: The budget for this role is 10-16 LPA
+  job_facts:
+    summary: Answer business questions with SQL and dashboards for Cartwheel Commerce's category, marketing and operations teams, and analyse A/B tests.
+    location: Sector 44, Gurugram
+    work_mode: Hybrid, 3 days a week in the office
+    interview_process: A SQL and case-study test, and two interviews with the analytics team
+    salary_band: 10-16 LPA
+illegal: []
+overrides:
+  - requirement_id: ab_testing
+    quote: I'd check the sample size was big enough and the p-value was under 0.05 before calling it.
+    agent_score: 0.5
+    agent_result: needs_review
+    recruiter_result: suitable
+    note: Sample size plus significance is the core of it for a mid-level analyst.

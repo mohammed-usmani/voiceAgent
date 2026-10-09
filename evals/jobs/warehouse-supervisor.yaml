@@ -1,0 +1,88 @@
+title: Warehouse Shift Supervisor
+company: Swiftmove Logistics
+description: |
+  Swiftmove Logistics runs a 2,00,000 sq ft fulfilment centre in Bhiwandi that ships
+  orders for large e-commerce and FMCG brands. We need a Shift Supervisor to run inbound
+  and outbound operations on the floor.
+
+  Key responsibilities:
+  - Lead a shift of 30-50 pickers, packers and loaders and plan their daily work.
+  - Make sure every truck is loaded and dispatched on time and stock counts match the WMS.
+  - Enforce safety rules for forklifts and material handling equipment.
+  - Report daily productivity and resolve issues with the transport team.
+
+  Requirements:
+  - Minimum 2 years of experience supervising a team in a warehouse or distribution centre.
+  - Must be willing to work rotating shifts, including night shifts.
+  - Hands-on experience with a warehouse management system (WMS) such as SAP EWM or Unicommerce.
+  - Forklift safety certification is an advantage.
+  - Male candidates under 35 only.
+
+  Salary: 3.6-5 LPA plus shift allowance and PF. Company transport is provided from
+  Thane and Kalyan. Hiring process: a phone screening, a floor visit and an interview with
+  the operations manager.
+notes: ""
+criteria:
+  pass_threshold: 0.6
+  requirements:
+    - id: supervision_years
+      label: Warehouse supervision experience
+      kind: number
+      unit: years
+      question: How many years have you supervised a team in a warehouse or distribution centre?
+      hard: true
+      rule: {op: ">=", value: 2}
+      source: Minimum 2 years of experience supervising a team in a warehouse or distribution centre
+    - id: rotating_shifts
+      label: Rotating shifts including nights
+      kind: boolean
+      question: The role has rotating shifts, including night shifts. Would that work for you?
+      hard: true
+      rule: {op: "==", value: true}
+      disclose: true
+      source: Must be willing to work rotating shifts, including night shifts
+    - id: wms_experience
+      label: WMS experience
+      kind: text
+      question: Which warehouse management system have you used, and what did you do in it?
+      weight: 0.45
+      rubric: Names a WMS and describes hands-on tasks in it, such as receiving, putaway, picking waves or cycle counts.
+      source: Hands-on experience with a warehouse management system (WMS) such as SAP EWM or Unicommerce
+    - id: team_size
+      label: Largest team led
+      kind: number
+      unit: people
+      question: What is the largest team you have led on a shift?
+      weight: 0.25
+      source: Lead a shift of 30-50 pickers, packers and loaders
+    - id: forklift_cert
+      label: Forklift safety certification
+      kind: boolean
+      question: Do you have a forklift safety certification?
+      weight: 0.2
+      source: Forklift safety certification is an advantage
+    - id: expected_salary
+      label: Expected salary
+      kind: number
+      unit: LPA
+      question: What annual salary are you expecting, in lakhs?
+      weight: 0.1
+      sensitive: true
+      source: 3.6-5 LPA plus shift allowance and PF
+  job_facts:
+    summary: Run inbound and outbound operations on one shift at Swiftmove's Bhiwandi fulfilment centre, leading 30-50 people.
+    location: Bhiwandi, near Mumbai
+    work_mode: On site, rotating shifts including nights
+    interview_process: A floor visit and an interview with the operations manager
+    salary_band: 3.6-5 LPA plus shift allowance and PF
+    other:
+      - Company transport from Thane and Kalyan
+illegal:
+  - Male candidates under 35 only.
+overrides:
+  - requirement_id: wms_experience
+    quote: I used Unicommerce every day for putaway and cycle counts.
+    agent_score: 0.5
+    agent_result: needs_review
+    recruiter_result: suitable
+    note: Daily hands-on use for core tasks is enough; we train on our own WMS.
