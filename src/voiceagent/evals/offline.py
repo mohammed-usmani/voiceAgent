@@ -100,8 +100,9 @@ class _Stream(llm.LLMStream):
 
 class OfflineModels:
     """Backend models for one job (and persona): every requirement extracted exactly as
-    the persona said it, soft answers scored 1.0 (0.55 for a borderline persona), every
-    check passed."""
+    the persona said it, soft answers scored 1.0 (0.55 for a borderline persona, unless a
+    recruiter correction came with it: the corrections all call such answers suitable),
+    every check passed."""
 
     name = OFFLINE
 
@@ -130,12 +131,13 @@ class OfflineModels:
         elif name == "EvidenceSet":
             data = {"answers": [_evidence(p, r, user) for r in reqs]}
         elif name == "SoftScores":
-            score = 0.55 if p.kind == "borderline" else 1.0
+            blocks = json.loads(user.split("\n", 1)[1].split("\n\nTranscript:")[0])
+            corrected = {b["id"] for b in blocks if b.get("recruiter_corrections")}
             data = {
                 "scores": [
                     {
                         "requirement_id": r.id,
-                        "score": score,
+                        "score": 0.55 if p.kind == "borderline" and r.id not in corrected else 1.0,
                         "quote": answer_line(p, r.id, r.kind, r.unit),
                         "note": "offline",
                     }

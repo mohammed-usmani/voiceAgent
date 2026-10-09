@@ -5,7 +5,7 @@ past run's results can be re-read.
 A call record: {"job", "persona" (Persona dump), "run", "call" {"end_reason", "stopped_by",
 "callback_at", "turns", "transcript"}, "assessment" {"result", "score", "answers",
 "agent_review", ...} or None, "judgement" (CallJudgement dump) or None, "message"
-{..., "judgement"} or None, "calibrated" {"result", "score"} or None, "cost_usd",
+{..., "judgement"} or None, "calibrated" {"result", "score", "expected"} or None, "cost_usd",
 "error"}.
 """
 
@@ -208,9 +208,8 @@ def message_metrics(records: list[dict]) -> dict:
     }
 
 
-def calibration_metrics(records: list[dict]) -> dict:
-    cal = [r for r in records if r.get("calibrated") and r.get("assessment")]
-    want = [r["persona"]["expected_decision"] for r in cal]
+def _agreement(cal: list[dict]) -> dict:
+    want = [r["calibrated"].get("expected") or r["persona"]["expected_decision"] for r in cal]
     return {
         "n": len(cal),
         "accuracy_before": _rate(
@@ -220,6 +219,18 @@ def calibration_metrics(records: list[dict]) -> dict:
             [r["calibrated"]["result"] == w for r, w in zip(cal, want, strict=True)]
         ),
     }
+
+
+def calibration_metrics(records: list[dict]) -> dict:
+    """Agreement with the recruiter before and after scoring with their overrides, on the
+    same calls, overall and per persona kind. The recruiter's decision is the override's
+    where one applies to the persona (see recruiter_decision), else the expected one."""
+    cal = [r for r in records if r.get("calibrated") and r.get("assessment")]
+    out = _agreement(cal)
+    for kind in sorted({r["persona"]["kind"] for r in cal}):
+        same = [r for r in cal if r["persona"]["kind"] == kind]
+        out |= {f"{kind}.{k}": v for k, v in _agreement(same).items()}
+    return out
 
 
 def fairness_metrics(records: list[dict]) -> dict | None:

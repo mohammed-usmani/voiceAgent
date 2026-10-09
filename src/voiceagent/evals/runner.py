@@ -21,7 +21,14 @@ from voiceagent.evals.jobs import JOBS_DIR, RefJob, load_jobs
 from voiceagent.evals.judges import judge_call, judge_message, match_criteria
 from voiceagent.evals.metrics import criteria_metrics, fairness_metrics, summarize
 from voiceagent.evals.offline import OfflineAgentLLM, OfflineModels, OfflineSimulator
-from voiceagent.evals.personas import FAIRNESS_NAMES, Persona, make_persona, persona_keys, renamed
+from voiceagent.evals.personas import (
+    FAIRNESS_NAMES,
+    Persona,
+    make_persona,
+    persona_keys,
+    recruiter_decision,
+    renamed,
+)
 from voiceagent.evals.personas import NAMES as PERSONA_NAMES
 from voiceagent.evals.report import RUNS_DIR, compare, new_run_dir, previous_run, write_run
 from voiceagent.evals.simulate import Simulator, simulate_call
@@ -227,7 +234,8 @@ async def eval_persona(
                 and not fairness_replay
             ):
                 c = assess(overrides_lookup(job))
-                rec["calibrated"] = {"result": c.result, "score": c.score}
+                expected = recruiter_decision(job, persona) or persona.expected_decision
+                rec["calibrated"] = {"result": c.result, "score": c.score, "expected": expected}
             if a.result in MESSAGE_KIND:
                 meter.check()
                 kind = MESSAGE_KIND[a.result]

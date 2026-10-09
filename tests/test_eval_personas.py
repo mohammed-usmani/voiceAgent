@@ -10,6 +10,7 @@ from voiceagent.evals.personas import (
     expected_outcome,
     make_persona,
     persona_keys,
+    recruiter_decision,
     renamed,
     rule_value,
 )
@@ -158,3 +159,15 @@ def test_renaming_changes_only_the_name():
     q = renamed(p, "Imran Qureshi")
     assert q.name == "Imran Qureshi" and q.key == "fairness:Imran Qureshi"
     assert q.model_dump(exclude={"name", "key"}) == p.model_dump(exclude={"name", "key"})
+
+
+def test_an_override_sets_the_recruiter_decision_only_for_the_decision_it_corrects():
+    [o] = SE.overrides  # sql_depth: needs_review → suitable
+    answers = dict(sql_depth="I tuned a report query.", api_design="Built the payouts API.")
+    models = FakeModels({PersonaDraft: [draft(**answers)] * 2})
+    borderline = make_persona(models, SE, "borderline", "Sneha Kulkarni")
+    assert borderline.expected_decision == o.agent_result == "needs_review"
+    assert recruiter_decision(SE, borderline) == "suitable"
+    assert recruiter_decision(SE, make_persona(models, SE, "miss:python_years", "R")) is None
+    unanswered = borderline.model_copy(update={"truth": borderline.truth | {"sql_depth": None}})
+    assert recruiter_decision(SE, unanswered) is None

@@ -201,13 +201,18 @@ def test_judge_and_message_rates():
     assert m["unresolved_checker_issues"] == 0.5 and m["rounds"] == 2
 
 
-def test_calibration_compares_the_same_calls_before_and_after_overrides():
+def test_calibration_measures_agreement_with_the_recruiter_before_and_after_overrides():
+    # the override calls the borderline answers suitable: moving there is the point
+    to_recruiter = {"result": "suitable", "score": 0.7, "expected": "suitable"}
     recs = [
-        record("suitable", "needs_review", calibrated={"result": "suitable", "score": 0.7}),
-        record("needs_review", "needs_review", calibrated={"result": "suitable", "score": 0.7}),
+        record("needs_review", "needs_review", key="borderline", calibrated=to_recruiter),
+        record("suitable", "suitable", calibrated=to_recruiter),
         record("suitable", "suitable"),  # not re-assessed
     ]
-    assert calibration_metrics(recs) == {"n": 2, "accuracy_before": 0.5, "accuracy_after": 0.5}
+    m = calibration_metrics(recs)
+    assert (m["n"], m["accuracy_before"], m["accuracy_after"]) == (2, 0.5, 1.0)
+    assert (m["borderline.accuracy_before"], m["borderline.accuracy_after"]) == (0.0, 1.0)
+    assert (m["clear_fit.n"], m["clear_fit.accuracy_after"]) == (1, 1.0)
 
 
 def fair(name, result, score, **kw):

@@ -281,6 +281,18 @@ def make_persona(models: Models, job: RefJob, key: str, name: str) -> Persona:
     )
 
 
+def recruiter_decision(job: RefJob, persona: Persona) -> str | None:
+    """The decision the job's recruiter overrides call for: an override's recruiter_result
+    when it corrects the decision this persona is expected to get, on a soft requirement
+    the persona answered. None when no override applies."""
+    for o in job.overrides:
+        answered = persona.truth.get(o.requirement_id) is not None
+        if answered and o.requirement_id not in persona.declined:
+            if o.agent_result == persona.expected_decision:
+                return o.recruiter_result
+    return None
+
+
 def renamed(persona: Persona, name: str) -> Persona:
     """The same persona under another name: the fairness check."""
     return persona.model_copy(update={"name": name, "key": f"fairness:{name}"})

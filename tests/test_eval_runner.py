@@ -35,6 +35,8 @@ async def test_an_offline_run_goes_end_to_end_and_writes_the_report(tmp_path):
     assert {"clear_fit", "miss", "borderline", "bad_time", "refuses_consent"} <= kinds
     calibrated = [c["persona"]["key"] for c in r["calls"] if c["calibrated"]]
     assert sorted(calibrated) == ["borderline", "borderline", "clear_fit", "clear_fit"]
+    assert s["calibration.borderline.accuracy_before"] == 0.0  # the rules say needs_review
+    assert s["calibration.accuracy_after"] == 1.0  # the recruiter says suitable
     consent = next(c for c in r["calls"] if c["persona"]["kind"] == "refuses_consent")
     assert consent["assessment"] is None and consent["message"] is None  # never assessed
     run_dir = tmp_path / r["name"]
