@@ -171,3 +171,10 @@ def test_an_override_sets_the_recruiter_decision_only_for_the_decision_it_correc
     assert recruiter_decision(SE, make_persona(models, SE, "miss:python_years", "R")) is None
     unanswered = borderline.model_copy(update={"truth": borderline.truth | {"sql_depth": None}})
     assert recruiter_decision(SE, unanswered) is None
+
+
+def test_a_strong_candidate_says_yes_to_a_preferred_certification():
+    nurse = next(j for j in JOBS if j.slug == "staff-nurse")
+    models = FakeModels({PersonaDraft: [draft(bls=False)] * 2})
+    assert make_persona(models, nurse, "clear_fit", "Ananya Rao").truth["bls"] is True
+    assert make_persona(models, nurse, "borderline", "Sneha Kulkarni").truth["bls"] is False

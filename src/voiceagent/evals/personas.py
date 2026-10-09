@@ -263,6 +263,10 @@ def make_persona(models: Models, job: RefJob, key: str, name: str) -> Persona:
             n = as_number(a.value)
             if n is not None:
                 truth[r.id] = _num(n)
+        elif r.kind == "boolean" and kind not in QUALITY:
+            # A strong answer to a yes/no requirement is yes; the writer once gave a clear
+            # fit "no" for a preferred certification.
+            truth[r.id] = True
         else:
             truth[r.id] = a.value
     for r in reqs:
