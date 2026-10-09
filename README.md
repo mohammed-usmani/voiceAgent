@@ -37,7 +37,9 @@ What moved it:
 A faster model (Qwen3.8-27B on Groq, ~0.16 s to first token) was tried and dropped: on
 real conversations its replies came back empty or cut off mid-sentence, with no error.
 
-Scale: one caller, ten test calls.
+Scale: one caller, ten test calls. These were measured with Gemini 2.5 Flash; the agent
+now runs Qwen3.5-9B on Together AI (see [Model choice](#model-choice)), and the call
+numbers will be re-measured.
 
 ## Turn-taking
 
@@ -85,7 +87,7 @@ A voice agent that gets no reply text says nothing, and the caller hears dead ai
 [`replies.py`](src/voiceagent/replies.py) guards against that:
 
 - If the main model's reply comes back empty or fails, the same turn is answered by a
-  backup model on a different provider.
+  backup model from a different model family.
 - The history sent to the model is cleaned first: a long answer split into several
   caller messages is joined into one, agent replies cut off after a few words are
   dropped, and provider-specific metadata is removed.
@@ -98,7 +100,7 @@ A voice agent that gets no reply text says nothing, and the caller hears dead ai
 |---|---|
 | Transport / orchestration | LiveKit Agents, with calls over SIP |
 | STT | Deepgram Nova-3, Indian English (`en-IN`) |
-| LLM | Gemini 2.5 Flash with thinking off (~0.5 s to first token, ~1.1 s with thinking on); gpt-oss-20b on Groq answers if a reply comes back empty or fails |
+| LLM | Qwen3.5-9B on Together AI with reasoning off (0.64 s median to first token); MiniMax-M3 answers if a reply comes back empty or fails |
 | TTS | Cartesia Sonic-3.6, voice Jacqueline, English |
 
 ## Running it
@@ -156,9 +158,55 @@ uv run screening-worker   # runs the agents
 | `POST /jobs/{id}/criteria:regenerate` · `:approve` | regenerate, or approve for calling |
 | `GET /events?after=` | event feed |
 
+The backend's agents run on DeepSeek-V4-Flash (backup MiniMax-M3) via Together AI's
+JSON-schema mode; embeddings come from `BAAI/bge-base-en-v1.5`, run locally.
+
+## Model choice
+
+All models are on [Together AI](https://www.together.ai). Measured from India on
+9 Oct 2026; only models available serverless on the account were compared.
+
+**Voice replies.** Streamed on the agent's real prompt and a 6-turn screening
+conversation, reasoning off, 5 runs per model. "First token" is when the first spoken word
+arrives.
+
+| Model | First token, median | First token, worst | Empty replies |
+|---|---|---|---|
+| **Qwen/Qwen3.5-9B** (chosen) | **0.64 s** | 0.74 s | 0/5 |
+| zai-org/GLM-5.3 | 0.67 s | 0.99 s | 0/5 |
+| deepseek-ai/DeepSeek-V4.1-Flash | 0.68 s | 3.43 s | 0/5 |
+| **MiniMaxAI/MiniMax-M3** (backup) | 0.77 s | 1.09 s | 0/5 |
+| meta-models/Muse-Glimmer-30B | 0.79 s | 1.32 s | 0/5 |
+| zai-org/GLM-5.3-Flash | 0.83 s | 1.35 s | 0/5 |
+| deepseek-ai/DeepSeek-V4-Flash-0731 | 0.85 s | 1.42 s | 0/5 |
+| meta-llama/Llama-3.3-70B-Instruct-Turbo | 1.47 s | 2.50 s | 0/5 |
+| openai/gpt-oss-120b | 1.51 s | 1.61 s | 1/5 |
+
+**Screening criteria.** The full criteria agent (draft, check every requirement against
+the job description, critique, revise up to 3 times), reasoning on, run once on two job
+descriptions: an inside-sales role containing an illegal "female candidates, age under 35"
+line, and a senior backend role.
+
+| Model | Sales role | Backend role | Requirements grounded | Illegal criteria | Read "1-3 years" as at least 1 |
+|---|---|---|---|---|---|
+| **deepseek-ai/DeepSeek-V4-Flash-0731** (chosen) | 72 s | **31 s** | 15/15 | none | no |
+| deepseek-ai/DeepSeek-V4-Pro-0813 | 57 s | 34 s | 15/15 | none | **yes** |
+| **MiniMaxAI/MiniMax-M3** (backup) | 74 s | 73 s | 14/14 | none | no |
+| zai-org/GLM-5.3-Flash | 76 s | 149 s | 14/14 | none | no |
+| deepseek-ai/DeepSeek-V4.1-Flash | 121 s | 118 s | 16/16 | none | no |
+| moonshotai/Kimi-K3 | 158 s | 49 s | 15/15 | none | no |
+| zai-org/GLM-5.3 | 149 s | 153 s | 16/16 | none | no |
+| thinkingmachines/Inkling | 83 s | 416 s | 13/13 | none | no |
+| openai/gpt-oss-120b | 266 s | 245 s | 15/15 | none | no |
+| Qwen/Qwen3.8-2.4T-A95B | 155 s | — | 8/8 | none | no |
+
+Every model dropped the illegal line and got the backend role's "4+ years" right. Only
+DeepSeek-V4-Pro read "1-3 years" as a minimum; the prompts now say so explicitly. Scale:
+one run per job per model, so these are measurements, not a ranking.
+
 ## Built with
 
-The [LiveKit Agents](https://github.com/livekit/agents) SDK, with Deepgram, Gemini, Groq
+The [LiveKit Agents](https://github.com/livekit/agents) SDK, with Deepgram, Together AI
 and Cartesia as providers. Turn-taking starts from LiveKit's recommended setup. The
 short-answer turn rule, the LLM fallback and history cleanup, the decision log and the
 outbound dialer are original to this repo.
