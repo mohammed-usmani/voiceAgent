@@ -11,7 +11,14 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from voiceagent.criteria.schema import Criteria
 from voiceagent.db.base import make_engine, make_sessionmaker
-from voiceagent.db.models import ACTIVE_CALL_STATUSES, Call, Candidate, CriteriaVersion, Job
+from voiceagent.db.models import (
+    ACTIVE_CALL_STATUSES,
+    FINISHED_CANDIDATE_STATUSES,
+    Call,
+    Candidate,
+    CriteriaVersion,
+    Job,
+)
 from voiceagent.events import emit
 from voiceagent.settings import get_settings
 from voiceagent.worker.queue import enqueue
@@ -66,13 +73,20 @@ def close_stale_calls(session: Session, candidate_id: uuid.UUID | None = None) -
 
 def stop_call(session: Session, call: Call, status: str, error: str) -> None:
     """End a call that never became a conversation: nobody answered, the dial failed, or
-    the agent couldn't load it. The candidate can be called again. Not committed."""
+    the agent couldn't load it. The candidate goes back to what they were before this call
+    (or no_answer), so they can be called again. Not committed."""
     call.status = status
     call.end_reason = "error" if status == "failed" else None
     call.error = error[:2000]
     call.ended_at = datetime.now(UTC)
+    prior = call.prior_candidate_status
+    if prior in (None, "calling"):
+        prior = "pending"
     candidate = session.get(Candidate, call.candidate_id)
-    candidate.status = "no_answer" if status == "no_answer" else "pending"
+    if status == "no_answer" and prior not in FINISHED_CANDIDATE_STATUSES:
+        candidate.status = "no_answer"
+    else:
+        candidate.status = prior  # e.g. a failed re-call of a screened candidate
     emit(session, "call", call.id, status, {"error": error[:500]})
 
 

@@ -5,16 +5,30 @@ import io
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from voiceagent.api.deps import get_session
 from voiceagent.api.jobs import get_job
-from voiceagent.api.schemas import CallOut, CandidateCreate, CandidateOut, ImportResult, RowError
+from voiceagent.api.schemas import (
+    CallOut,
+    CallRequest,
+    CandidateCreate,
+    CandidateOut,
+    ImportResult,
+    RowError,
+)
 from voiceagent.call.store import close_stale_calls
-from voiceagent.db.models import ACTIVE_CALL_STATUSES, Call, Candidate, CriteriaVersion, Job
+from voiceagent.db.models import (
+    ACTIVE_CALL_STATUSES,
+    FINISHED_CANDIDATE_STATUSES,
+    Call,
+    Candidate,
+    CriteriaVersion,
+    Job,
+)
 from voiceagent.events import emit
 from voiceagent.worker.queue import enqueue
 
@@ -22,6 +36,7 @@ router = APIRouter()
 DB = Annotated[Session, Depends(get_session)]
 CSV_COLUMNS = {"name", "email", "phone", "sip_address", "resume_text"}
 MAX_IMPORT_ROWS = 1000
+MAX_IMPORT_BYTES = 2_000_000
 
 
 def get_candidate(session: Session, candidate_id: uuid.UUID, *, lock: bool = False) -> Candidate:
@@ -88,18 +103,41 @@ def add_candidate(job_id: uuid.UUID, body: CandidateCreate, session: DB) -> Cand
     return candidate
 
 
-@router.post("/jobs/{job_id}/candidates:import", response_model=ImportResult)
+async def csv_text(request: Request) -> str:
+    """The request body as text, read up to MAX_IMPORT_BYTES (413 beyond it)."""
+    body = bytearray()
+    async for chunk in request.stream():
+        body += chunk
+        if len(body) > MAX_IMPORT_BYTES:
+            raise HTTPException(
+                status_code=413, detail=f"the file is over {MAX_IMPORT_BYTES // 1_000_000} MB"
+            )
+    try:
+        return body.decode("utf-8-sig")  # -sig: Excel's BOM
+    except UnicodeDecodeError:
+        raise HTTPException(
+            status_code=422,
+            detail="the file isn't UTF-8 text: in Excel, save it as 'CSV UTF-8' and upload again",
+        ) from None
+
+
+@router.post(
+    "/jobs/{job_id}/candidates:import",
+    response_model=ImportResult,
+    openapi_extra={
+        "requestBody": {"required": True, "content": {"text/csv": {"schema": {"type": "string"}}}}
+    },
+)
 def import_candidates(
-    job_id: uuid.UUID,
-    body: Annotated[bytes, Body(media_type="text/csv")],
-    session: DB,
+    job_id: uuid.UUID, text: Annotated[str, Depends(csv_text)], session: DB
 ) -> ImportResult:
-    """Send the file as the request body with `Content-Type: text/csv`. Columns: name,
-    email, phone and/or sip_address, optional resume_text; others are ignored."""
+    """Send the file (UTF-8, at most 2 MB) as the request body with `Content-Type:
+    text/csv`. Columns: name, email, phone and/or sip_address, optional resume_text;
+    others are ignored."""
     job = get_job(session, job_id, lock=True)
     try:
-        rows, errors = parse_candidates_csv(body.decode("utf-8-sig"))  # -sig: Excel's BOM
-    except (ValueError, csv.Error) as e:  # UnicodeDecodeError is a ValueError
+        rows, errors = parse_candidates_csv(text)
+    except (ValueError, csv.Error) as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     taken = set(session.scalars(select(Candidate.email).where(Candidate.job_id == job.id)))
     added = []
@@ -159,9 +197,17 @@ def delete_candidate(candidate_id: uuid.UUID, session: DB) -> Response:
 
 
 @router.post("/candidates/{candidate_id}/call", status_code=202, response_model=CallOut)
-def call_candidate(candidate_id: uuid.UUID, session: DB) -> Call:
-    """Queue a call now. Calling hours, retries and campaigns arrive in milestone 5."""
+def call_candidate(candidate_id: uuid.UUID, session: DB, body: CallRequest | None = None) -> Call:
+    """Queue a call now. Calling hours, retries and campaigns arrive in milestone 5.
+
+    A candidate who was already screened, declined or withdrew is only called again with
+    `{"force": true}`."""
     candidate = get_candidate(session, candidate_id, lock=True)  # one request at a time
+    if candidate.status in FINISHED_CANDIDATE_STATUSES and not (body and body.force):
+        raise HTTPException(
+            status_code=409,
+            detail=f'candidate is {candidate.status}; send {{"force": true}} to call again',
+        )
     job = session.get(Job, candidate.job_id)
     criteria = session.scalars(
         select(CriteriaVersion).where(
@@ -188,6 +234,7 @@ def call_candidate(candidate_id: uuid.UUID, session: DB) -> Call:
         criteria_version_id=criteria.id,
         attempt=previous + 1,
         status="queued",
+        prior_candidate_status=candidate.status,
     )
     session.add(call)
     session.flush()

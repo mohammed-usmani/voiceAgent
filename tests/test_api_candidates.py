@@ -5,7 +5,7 @@ from sqlalchemy import select
 from tests.fakes import FakeModels
 from tests.seed import seed_call, seed_candidate, seed_job
 from voiceagent.api.app import create_app
-from voiceagent.api.candidates import parse_candidates_csv
+from voiceagent.api.candidates import MAX_IMPORT_BYTES, parse_candidates_csv
 from voiceagent.db.base import make_sessionmaker
 from voiceagent.db.models import Call, Candidate, Event
 
@@ -164,3 +164,21 @@ def test_parse_numbers_rows_as_a_spreadsheet_does():
 def test_parse_refuses_a_file_without_the_needed_columns():
     with pytest.raises(ValueError, match="name, email, and phone or sip_address"):
         parse_candidates_csv("full name,mail\nPriya,priya@example.com\n")
+
+
+def test_import_refuses_files_over_the_byte_cap(client, session, job):
+    # M8: the body is capped before it is decoded or parsed.
+    big = CSV_FILE.encode() + b"x" * MAX_IMPORT_BYTES
+    r = client.post(f"/jobs/{job.id}/candidates:import", content=big, headers=CSV_HEADERS)
+    assert r.status_code == 413
+    assert session.scalars(select(Candidate)).all() == []
+
+
+def test_import_explains_a_non_utf8_file(client, job):
+    # M8: Excel's plain "CSV" is cp1252; say how to fix it instead of a codec error.
+    text = "name,email,phone\nRené Dupont,rene@example.com,+919876543210\n"
+    r = client.post(
+        f"/jobs/{job.id}/candidates:import", content=text.encode("cp1252"), headers=CSV_HEADERS
+    )
+    assert r.status_code == 422
+    assert "UTF-8" in r.json()["detail"] and "codec" not in r.json()["detail"]

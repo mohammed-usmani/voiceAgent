@@ -181,6 +181,13 @@ class CandidateOut(BaseModel):
     created_at: datetime
 
 
+class CallRequest(BaseModel):
+    force: bool = Field(
+        default=False,
+        description="call a candidate who is already screened, declined or withdrew",
+    )
+
+
 class CallOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID

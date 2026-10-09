@@ -124,6 +124,8 @@ class Event(Base):
 
 # A call in one of these states still owns the candidate: no second call may start.
 ACTIVE_CALL_STATUSES = ("queued", "ringing", "in_progress")
+# A candidate in one of these states is done with calls; calling again needs force.
+FINISHED_CANDIDATE_STATUSES = ("screened", "decided", "notified", "declined_consent", "withdrawn")
 
 
 class Candidate(Timestamps, Base):
@@ -170,3 +172,6 @@ class Call(Timestamps, Base):
     # [{"role": "agent" | "candidate", "text": str, "at": ISO 8601}]
     transcript: Mapped[list] = mapped_column(JSONB, default=list)
     error: Mapped[str | None] = mapped_column(Text)
+    # The candidate's status when this call was queued, restored if the call never becomes
+    # a conversation (a failed re-call of a screened candidate keeps them screened).
+    prior_candidate_status: Mapped[str | None] = mapped_column(String(30))
