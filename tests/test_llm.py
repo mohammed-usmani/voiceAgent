@@ -33,6 +33,11 @@ class FakeEmbedder:
         return [-float(len(text))]
 
 
+@pytest.fixture(autouse=True)
+def no_waiting(monkeypatch):
+    monkeypatch.setattr("voiceagent.llm.time.sleep", lambda s: None)
+
+
 def models(main, backup):
     return FallbackModels(main, backup, FakeEmbedder(), name="test")
 
@@ -62,13 +67,46 @@ def test_embed_delegates():
     assert models(FakeChat(), FakeChat()).embed(["ab", "c"]) == [[2.0], [1.0]]
 
 
-def test_default_clients_leave_retries_to_fallback_models_and_time_out():
-    settings = Settings(database_url="", api_key="", gemini_api_key="g", groq_api_key="q")
+def test_default_clients_run_on_together_and_leave_retries_to_fallback_models():
+    settings = Settings(database_url="", api_key="", together_api_key="t")
     m = default_models(settings)
     (_, main), _, (_, backup) = m._attempts
-    assert (main.max_retries, main.timeout) == (0, 60)
-    assert (backup.max_retries, backup.request_timeout) == (0, 60)
+    assert (main.model_name, backup.model_name) == (
+        "deepseek-ai/DeepSeek-V4-Flash-0731",
+        "MiniMaxAI/MiniMax-M3",
+    )
+    for chat in (main, backup):
+        assert chat.openai_api_base == "https://api.together.xyz/v1"
+        assert (chat.max_retries, chat.request_timeout) == (0, 60)
+
+
+def test_retries_wait_between_attempts(monkeypatch):
+    # Two back-to-back calls during a provider's "high demand" 503 both failed.
+    waits = []
+    monkeypatch.setattr("voiceagent.llm.time.sleep", waits.append)
+    main = FakeChat(RuntimeError("503"), RuntimeError("503"))
+    backup = FakeChat(Out(title="Engineer"))
+    models(main, backup).structured(Out, "sys", "user")
+    assert waits == [2, 4]
+
+
+def test_no_wait_after_success(monkeypatch):
+    waits = []
+    monkeypatch.setattr("voiceagent.llm.time.sleep", waits.append)
+    models(FakeChat(Out(title="x")), FakeChat()).structured(Out, "sys", "user")
+    assert waits == []
 
 
 def test_embed_query_uses_the_query_embedding():
     assert models(FakeChat(), FakeChat()).embed_query("abc") == [-3.0]
+
+
+def test_local_embedder_makes_768_dim_query_and_document_vectors():
+    from voiceagent.llm import LocalEmbedder
+
+    e = LocalEmbedder()
+    docs = e.embed_documents(["Python backend experience", "Forklift licence"])
+    query = e.embed_query("years of Python")
+    assert [len(v) for v in docs] == [768, 768] and len(query) == 768
+    similarity = [sum(a * b for a, b in zip(query, d, strict=True)) for d in docs]
+    assert similarity[0] > similarity[1]

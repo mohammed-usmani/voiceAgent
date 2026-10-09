@@ -4,8 +4,7 @@ from functools import lru_cache
 
 from dotenv import load_dotenv
 
-# gemini-embedding-001 truncated to 768 dimensions: plenty for short criteria texts,
-# and a quarter of the full 3072 in storage and index size.
+# BAAI/bge-base-en-v1.5, run locally (Together has no serverless embedding model).
 EMBEDDING_DIM = 768
 
 
@@ -13,11 +12,13 @@ EMBEDDING_DIM = 768
 class Settings:
     database_url: str
     api_key: str
-    gemini_api_key: str
-    groq_api_key: str
-    main_model: str = "gemini-2.5-flash"
-    backup_model: str = "openai/gpt-oss-20b"
-    embedding_model: str = "gemini-embedding-001"
+    together_api_key: str
+    # Chosen on the criteria agent's own task (10 Together models, 2 job descriptions):
+    # DeepSeek-V4-Flash was the fastest full run (31-72 s) at the lowest price, with every
+    # requirement grounded; MiniMax-M3 was the most consistent (73-74 s, no errors).
+    main_model: str = "deepseek-ai/DeepSeek-V4-Flash-0731"
+    backup_model: str = "MiniMaxAI/MiniMax-M3"
+    embedding_model: str = "BAAI/bge-base-en-v1.5"
 
 
 @lru_cache
@@ -28,6 +29,5 @@ def get_settings() -> Settings:
             "DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/screening"
         ),
         api_key=os.environ.get("SCREENING_API_KEY", ""),
-        gemini_api_key=os.environ.get("GEMINI_API_KEY", ""),
-        groq_api_key=os.environ.get("GROQ_API_KEY", ""),
+        together_api_key=os.environ.get("TOGETHER_API_KEY", ""),
     )
