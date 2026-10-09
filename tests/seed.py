@@ -3,7 +3,7 @@
 from sqlalchemy.orm import Session
 
 from voiceagent.criteria.schema import Criteria
-from voiceagent.db.models import Call, Candidate, CriteriaVersion, Job
+from voiceagent.db.models import Call, Candidate, CriteriaVersion, Decision, Job, Message
 from voiceagent.settings import DEFAULT_VOICE
 
 JD = (
@@ -111,3 +111,74 @@ def seed_call(session: Session, candidate: Candidate, cv: CriteriaVersion, **kw)
     session.add(call)
     session.commit()
     return call
+
+
+# A finished screening of Priya: 5 years of Python, fine with Pune, 30 LPA.
+TRANSCRIPT = [
+    {"role": "agent", "text": "Hi Priya, this is Aria from Acme. Is now a good time?"},
+    {"role": "candidate", "text": "Yes, sure, go ahead."},
+    {"role": "agent", "text": "How many years have you worked with Python?"},
+    {"role": "candidate", "text": "I have been writing Python for about five years now."},
+    {"role": "agent", "text": "Would working from our Pune office three days a week work?"},
+    {"role": "candidate", "text": "Yes, Pune three days a week works for me."},
+    {"role": "agent", "text": "What salary are you expecting?"},
+    {"role": "candidate", "text": "I am expecting around 30 lakhs per annum."},
+]
+
+
+def seed_finished_call(
+    session: Session, *, end_reason: str = "completed", transcript: list | None = None, **job_kw
+) -> Call:
+    """A call the agent has saved: completed, with a transcript; candidate screened."""
+    job, cv = seed_job(session, **job_kw)
+    candidate = seed_candidate(session, job, status="screened")
+    return seed_call(
+        session,
+        candidate,
+        cv,
+        status="completed",
+        end_reason=end_reason,
+        transcript=TRANSCRIPT if transcript is None else transcript,
+    )
+
+
+def seed_decision(session: Session, call: Call, **kw) -> Decision:
+    fields = dict(
+        candidate_id=call.candidate_id,
+        call_id=call.id,
+        criteria_version_id=call.criteria_version_id,
+        result="not_suitable",
+        score=0.3,
+        hard_failures=["python_years"],
+        reasons=[
+            {
+                "requirement_id": "expected_salary",
+                "verdict": "scored",
+                "score": 0.3,
+                "quote": "I am expecting around 30 lakhs per annum.",
+                "confidence": 0.9,
+                "note": "above the budget",
+            }
+        ],
+        summary="",
+        model="fake",
+    )
+    decision = Decision(**(fields | kw))
+    session.add(decision)
+    session.commit()
+    return decision
+
+
+def seed_message(session: Session, decision: Decision, **kw) -> Message:
+    fields = dict(
+        decision_id=decision.id,
+        kind="rejection",
+        to="priya@example.com",
+        subject="Your application to Acme",
+        body="Dear Priya, thank you for your time. We won't be moving forward.",
+        status="draft",
+    )
+    message = Message(**(fields | kw))
+    session.add(message)
+    session.commit()
+    return message

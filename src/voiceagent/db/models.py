@@ -175,3 +175,73 @@ class Call(Timestamps, Base):
     # The candidate's status when this call was queued, restored if the call never becomes
     # a conversation (a failed re-call of a screened candidate keeps them screened).
     prior_candidate_status: Mapped[str | None] = mapped_column(String(30))
+
+
+class Answer(Timestamps, Base):
+    """What the candidate said for one requirement, extracted from the transcript after the
+    call. `value` is in the requirement's unit; null when there was no usable answer."""
+
+    __tablename__ = "answers"
+    __table_args__ = (UniqueConstraint("call_id", "requirement_id"),)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    call_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("calls.id", ondelete="CASCADE"))
+    requirement_id: Mapped[str] = mapped_column(String(60))
+    value: Mapped[bool | float | str | None] = mapped_column(JSONB)
+    declined: Mapped[bool] = mapped_column(Boolean, default=False)
+    quote: Mapped[str] = mapped_column(Text, default="")
+    # Below 0.6 a hard requirement counts as unanswered; a quote not found in the
+    # candidate's own words caps it at 0.3.
+    confidence: Mapped[float] = mapped_column(Float)
+    inconsistency: Mapped[str | None] = mapped_column(Text)
+
+
+class Decision(Timestamps, Base):
+    """The assessment of one call. `result` is the agent's; `final_result` the recruiter's
+    when they override it. Status: pending_review → approved → sent, or → overridden →
+    approved → sent. One decision per call: re-running the assessment never adds another."""
+
+    __tablename__ = "decisions"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    candidate_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("candidates.id", ondelete="CASCADE"), index=True
+    )
+    call_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("calls.id", ondelete="CASCADE"), unique=True
+    )
+    criteria_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("criteria_versions.id"))
+    result: Mapped[str] = mapped_column(String(20))  # suitable · not_suitable · needs_review
+    score: Mapped[float | None] = mapped_column(Float)
+    hard_failures: Mapped[list] = mapped_column(JSONB, default=list)  # requirement ids
+    # [{"requirement_id", "verdict", "score", "quote", "confidence", "note"}]
+    reasons: Mapped[list] = mapped_column(JSONB, default=list)
+    summary: Mapped[str] = mapped_column(Text, default="")
+    model: Mapped[str] = mapped_column(String(300), default="")
+    status: Mapped[str] = mapped_column(String(20), default="pending_review")
+    final_result: Mapped[str | None] = mapped_column(String(20))
+    reviewer_note: Mapped[str | None] = mapped_column(Text)
+    # The reviewer agent's verdict: {"agree", "notes", "challenged", "model"}; null if it
+    # wasn't asked.
+    agent_review: Mapped[dict | None] = mapped_column(JSONB)
+    # Every step of the assessment run: [{"step", ...inputs and outputs}]
+    trace: Mapped[list] = mapped_column(JSONB, default=list)
+
+
+class Message(Timestamps, Base):
+    """The outcome email for a decision. Status: draft → queued → sending → sent, or
+    failed (retry with :approve). `issues` are checker objections the writer couldn't fix:
+    a message with issues is never sent without a recruiter."""
+
+    __tablename__ = "messages"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    decision_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("decisions.id", ondelete="CASCADE"), unique=True
+    )
+    kind: Mapped[str] = mapped_column(String(20))  # invite · rejection
+    to: Mapped[str] = mapped_column(String(320))
+    subject: Mapped[str] = mapped_column(String(300))
+    body: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="draft")
+    issues: Mapped[list] = mapped_column(JSONB, default=list)
+    model: Mapped[str] = mapped_column(String(300), default="")
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error: Mapped[str | None] = mapped_column(Text)

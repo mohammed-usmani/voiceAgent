@@ -5,8 +5,15 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
 from tests.conftest import TEST_URL
-from tests.seed import seed_call, seed_candidate, seed_job
-from voiceagent.db.models import Call, Job
+from tests.seed import (
+    seed_call,
+    seed_candidate,
+    seed_decision,
+    seed_finished_call,
+    seed_job,
+    seed_message,
+)
+from voiceagent.db.models import Answer, Call, Candidate, Decision, Job, Message
 
 
 def test_migration_creates_tables_and_vector_extension(session):
@@ -72,3 +79,40 @@ def test_connections_give_up_quickly_when_postgres_is_unreachable(monkeypatch):
     monkeypatch.setattr(base, "create_engine", lambda url, **kw: seen.update(kw))
     base.make_engine("postgresql+psycopg://x@10.255.255.1/db")
     assert seen["connect_args"] == {"connect_timeout": 5}
+
+
+def test_one_decision_per_call_and_one_message_per_decision(session):
+    call = seed_finished_call(session)
+    decision = seed_decision(session, call)
+    seed_message(session, decision)
+    with pytest.raises(IntegrityError):
+        seed_decision(session, call)
+    session.rollback()
+    with pytest.raises(IntegrityError):
+        seed_message(session, decision)
+
+
+def test_deleting_a_candidate_deletes_answers_decisions_and_messages(session):
+    call = seed_finished_call(session)
+    session.add(Answer(call_id=call.id, requirement_id="python_years", value=5.0, confidence=0.9))
+    decision = seed_decision(session, call)
+    seed_message(session, decision)
+    session.delete(session.get(Candidate, call.candidate_id))
+    session.commit()
+    for model in (Answer, Decision, Message):
+        assert session.scalars(select(model)).all() == []
+
+
+def test_answer_and_decision_defaults(session):
+    call = seed_finished_call(session)
+    answer = Answer(call_id=call.id, requirement_id="python_years", value=None, confidence=0.0)
+    session.add(answer)
+    decision = seed_decision(session, call)
+    session.commit()
+    assert (answer.declined, answer.quote, answer.inconsistency) == (False, "", None)
+    assert (decision.status, decision.final_result, decision.agent_review) == (
+        "pending_review",
+        None,
+        None,
+    )
+    assert decision.trace == []
