@@ -250,7 +250,12 @@ uv run alembic upgrade head
 uv run screening-api      # REST API on :8000, needs SCREENING_API_KEY
 uv run screening-worker   # runs the agents
 uv run voiceagent dev        # the call agent; reads screening calls from DATABASE_URL
+uv run screening-demo-seed   # demo jobs, candidates, calls and decisions; never dials or sends
 ```
+
+`screening-demo-seed` (run from the repository root) replaces the demo jobs, whose company
+names end in "(demo)", with two jobs from `evals/jobs/` and twelve candidates across every
+status. It refuses a database that has other jobs unless given `--force`.
 
 | Endpoint | What |
 |---|---|

@@ -33,6 +33,7 @@ voiceagent-call = "voiceagent.outbound:main"
 screening-api = "voiceagent.api.app:main"
 screening-worker = "voiceagent.worker.main:main"
 screening-eval = "voiceagent.evals.cli:main"
+screening-demo-seed = "voiceagent.demo:main"
 
 [dependency-groups]
 dev = [
