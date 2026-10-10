@@ -57,7 +57,8 @@ def test_generates_a_draft_version(engine, session):
     assert cv.requirements[0]["id"] == "python_years"
     assert session.get(Job, job.id).status == "criteria_ready"
     assert session.scalars(select(Task)).one().status == "done"
-    assert [e.type for e in session.scalars(select(Event))] == ["criteria_ready"]
+    events = session.scalars(select(Event).order_by(Event.id))
+    assert [e.type for e in events] == ["criteria_step"] * 4 + ["criteria_ready"]
 
 
 def test_regeneration_supersedes_old_draft(engine, session):
@@ -339,3 +340,28 @@ def test_a_callback_waiting_for_its_time_is_left_alone_by_the_sweep(engine, sess
     assert session.get(Candidate, candidate.id).status == "callback"
     assert [c.status for c in session.scalars(select(Call))] == ["completed"]
     assert session.get(Campaign, job.id).status == "active"
+
+
+def test_criteria_steps_are_committed_as_they_run(engine, session):
+    job = new_job(session)
+    session.close()
+    seen = []  # the steps another connection can see as each model call starts
+
+    def probe(schema):
+        with engine.connect() as c:
+            steps = c.execute(
+                text("SELECT data->>'step' FROM events WHERE type = 'criteria_step' ORDER BY id")
+            )
+            seen.append((schema.__name__, steps.scalars().all()))
+
+    run_once(make_sessionmaker(engine), Hooked(GOOD_REPLIES, probe))
+    assert seen == [("Draft", ["retrieve"]), ("Critique", ["retrieve", "draft"])]
+    steps = session.scalars(
+        select(Event).where(Event.type == "criteria_step").order_by(Event.id)
+    ).all()
+    assert [(e.entity, e.entity_id, e.data["step"], e.data["round"]) for e in steps] == [
+        ("job", str(job.id), "retrieve", 0),
+        ("job", str(job.id), "draft", 1),
+        ("job", str(job.id), "critique", 1),
+        ("job", str(job.id), "finalize", 1),
+    ]

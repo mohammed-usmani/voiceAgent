@@ -1,3 +1,5 @@
+import json
+
 from tests.fakes import FakeModels
 from voiceagent.agents.criteria import (
     MAX_ROUNDS,
@@ -216,3 +218,48 @@ def test_prompts_read_experience_ranges_as_minimums():
 
     assert "1-3 years" in DRAFTER and ">= 1" in DRAFTER
     assert "upper bound" in CRITIC
+
+
+def steps_of(models, similar=()):
+    steps = []
+    run_criteria_agent(
+        models,
+        title="Backend Engineer",
+        description=JD,
+        notes="",
+        similar_lookup=lambda q: list(similar),
+        on_step=lambda *report: steps.append(report),
+    )
+    return steps
+
+
+AGE_IS_ILLEGAL = Critique(issues=[Issue(requirement_id="age", kind="illegal", detail="age")])
+
+
+def test_each_step_is_reported_with_counts_and_a_redraft_is_a_revise():
+    models = FakeModels(
+        {
+            Draft: [draft(PYTHON, INVENTED), draft(PYTHON, HYBRID)],
+            Critique: [AGE_IS_ILLEGAL, Critique()],
+        }
+    )
+    steps = steps_of(models, similar=["Notice period"])
+    assert steps == [
+        ("retrieve", 0, {"similar": 1}),
+        ("draft", 1, {"requirements": 2, "suggestions": 0}),
+        ("critique", 1, {"issues": 2, "kinds": {"illegal": 1, "ungrounded": 1}}),
+        ("revise", 2, {"requirements": 2, "suggestions": 0}),
+        ("critique", 2, {"issues": 0, "kinds": {}}),
+        ("finalize", 2, {"requirements": 2, "removed": 0, "warnings": []}),
+    ]
+    assert JD not in json.dumps(steps)  # counts and warnings, never the prompts
+
+
+def test_finalize_reports_what_it_removed_and_why():
+    models = FakeModels({Draft: [draft(PYTHON, INVENTED)], Critique: [AGE_IS_ILLEGAL]})
+    steps = steps_of(models)
+    last_two = [(step, rnd) for step, rnd, _ in steps][-2:]
+    assert last_two == [("critique", MAX_ROUNDS), ("finalize", MAX_ROUNDS)]
+    summary = steps[-1][2]
+    assert (summary["requirements"], summary["removed"]) == (1, 1)
+    assert summary["warnings"][0].startswith("age: removed")

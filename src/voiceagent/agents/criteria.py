@@ -12,6 +12,7 @@ other unresolved issues into warnings for the recruiter.
 
 import json
 import logging
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal, TypedDict
@@ -142,6 +143,25 @@ def _issue_lines(issues: list[Issue]) -> str:
     )
 
 
+def step_report(name: str, state: State) -> tuple[str, int, dict]:
+    """(step, round, summary) for a step that just ran: counts and warnings, never prompts.
+    A draft after the first one is a "revise"."""
+    rnd = state.get("round", 0)
+    if name == "retrieve":
+        return name, rnd, {"similar": len(state["similar"])}
+    if name == "draft":
+        d = state["draft"]
+        counts = {"requirements": len(d.criteria.requirements), "suggestions": len(d.suggestions)}
+        return ("draft" if rnd == 1 else "revise"), rnd, counts
+    if name == "critique":
+        kinds = Counter(i.kind for i in state["issues"])
+        return name, rnd, {"issues": len(state["issues"]), "kinds": dict(sorted(kinds.items()))}
+    result = state["result"]
+    kept = len(result.criteria.requirements)
+    removed = len(state["draft"].criteria.requirements) - kept
+    return name, rnd, {"requirements": kept, "removed": removed, "warnings": result.warnings}
+
+
 def run_criteria_agent(
     models: Models,
     *,
@@ -150,8 +170,10 @@ def run_criteria_agent(
     notes: str,
     similar_lookup: Callable[[str], list[str]],
     heartbeat: Callable[[], None] = lambda: None,
+    on_step: Callable[[str, int, dict], None] = lambda *_: None,
 ) -> CriteriaResult:
-    """`heartbeat` runs before every step, so a worker can keep its task's lease alive."""
+    """`heartbeat` runs before every step, so a worker can keep its task's lease alive;
+    `on_step` gets each step's report (see step_report) once it has run."""
 
     def retrieve(state: State) -> State:
         query = f"{state['title']}\n{state['description'][:1500]}"
@@ -249,7 +271,9 @@ def run_criteria_agent(
     def beating(step: Callable[[State], State]) -> Callable[[State], State]:
         def run(state: State) -> State:
             heartbeat()
-            return step(state)
+            out = step(state)
+            on_step(*step_report(step.__name__, state | out))
+            return out
 
         return run
 

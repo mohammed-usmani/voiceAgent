@@ -193,6 +193,10 @@ every requirement in the description's own words, has a critic check it for lega
 phone-checkability, and revises until it passes. Approved criteria are indexed in pgvector
 and ground future jobs.
 
+While criteria generate, the worker writes one `job/criteria_step` event per step
+(`retrieve`, `draft`, `critique`, `revise`, `finalize`, with the round and a summary of
+counts and warnings), so the frontend can show the agent working.
+
 Candidates are then called: the agent builds its prompt from the approved criteria, says
 up front that it is an AI assistant and that the call is recorded, asks the questions in
 order, answers only from the job's facts, closes neutrally, and ends the call with its one

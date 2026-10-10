@@ -1,6 +1,6 @@
-"""Task handlers. A handler leaves its writes uncommitted: the worker commits them together
-with the task's completion (or, for `on_failure`, its failure), so a crash in between can't
-leave a result without a finished task."""
+"""Task handlers. A handler leaves its writes uncommitted (lease renewals and progress events
+aside): the worker commits them together with the task's completion (or, for `on_failure`,
+its failure), so a crash in between can't leave a result without a finished task."""
 
 import uuid
 
@@ -32,6 +32,13 @@ def generate_criteria(session: Session, models: Models, task: Task) -> None:
         finally:
             session.rollback()
 
+    def report(step: str, rnd: int, summary: dict) -> None:
+        # Committed at once, like the lease heartbeat: the event stream shows each step
+        # while the agent is still working.
+        data = {"step": step, "round": rnd, "summary": summary}
+        emit(session, "job", job_id, "criteria_step", data)
+        session.commit()
+
     result = run_criteria_agent(
         models,
         title=title,
@@ -39,6 +46,7 @@ def generate_criteria(session: Session, models: Models, task: Task) -> None:
         notes=notes,
         similar_lookup=similar,
         heartbeat=lambda: heartbeat(session, task),
+        on_step=report,
     )
 
     # Lock the job, as the API's criteria endpoints do, so versions and status can't race.
