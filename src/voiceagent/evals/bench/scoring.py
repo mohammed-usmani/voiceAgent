@@ -61,11 +61,15 @@ STYLES = (
     "a nervous or rambling candidate: spoken answers with hesitation, false starts or an aside",
 )
 LEVEL_BRIEF = {
-    2: "fully meets the rubric: covers all of its points concretely, as a strong candidate would",
+    2: "fully meets the rubric: covers all of its points concretely, with a specific example, "
+    "as a strong candidate would",
     1: "partly meets the rubric: covers only one or two of its points, or touches them only "
     "in general terms with no concrete detail",
-    0: "does not meet the rubric: vague, generic, off-topic or about something that doesn't "
-    "satisfy it, while still sounding like a genuine attempt to answer",
+    # The first wording ("vague, generic, off-topic ...") got answers that still covered a
+    # rubric point: the labeler put 6 of 8 at partly meets.
+    0: "does not meet the rubric: covers none of its points - only vague generalities, an "
+    "approach that is wrong or unrelated, or talk about something else - while still "
+    "sounding like a genuine attempt to answer",
 }
 STRESS_BASES = 40
 DECLINES = (

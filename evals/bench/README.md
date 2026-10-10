@@ -185,7 +185,19 @@ don't change.
 
 ## Amendments
 
-None yet.
+Made after a smoke run (`--limit 2`, $0.066) and two labeller probes ($0.064), before the
+main run. No metric or decision rule changed.
+
+1. *10 Oct 2026.* GLM-5.3 on Together reasons whether or not reasoning is switched off
+   (3,100-3,900 reasoning tokens per batch of 8 answers either way), so the labeller runs
+   with reasoning on as registered; it is the largest cost (about $0.02 per batch).
+2. *10 Oct 2026.* The generator's brief for "doesn't meet" was tightened: the first wording
+   produced answers that still covered a rubric point (the labeller put 6 of 8 at partly
+   meets). The briefs only steer generation; the agreement filter is unchanged. The smoke
+   run's generated answers and labels were discarded, so every label in the dataset comes
+   from the main build.
+3. *10 Oct 2026.* Expected spend from the smoke run's tokens: about $4.4 of the $5 budget,
+   so the tasks run in order (1, 2, 3) and the pre-declared reductions apply if needed.
 
 ## Reproduce
 
