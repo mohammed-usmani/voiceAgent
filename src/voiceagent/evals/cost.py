@@ -17,6 +17,8 @@ PRICES: dict[str, tuple[float, float]] = {
     "zai-org/GLM-5.3": (1.40, 4.40),
     "deepseek-ai/DeepSeek-V4.1-Flash": (0.30, 1.20),
     "offline": (0.0, 0.0),
+    # TypeSafe Jev decision model: the vendor's early-access price, output free (10 Oct 2026).
+    "typesafe/jev-latest": (0.042, 0.0),
 }
 # A model missing from the table is charged at the dearest price, so the budget errs high.
 UNKNOWN_PRICE = max(PRICES.values())

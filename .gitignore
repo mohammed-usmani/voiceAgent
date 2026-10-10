@@ -25,3 +25,6 @@ logs/
 # Evaluation runs (screening-eval writes them; keep the folder)
 evals/runs/*
 !evals/runs/.gitkeep
+
+# Decision benchmark raw runs (the labelled datasets in evals/bench/data/ are committed)
+evals/bench/runs/

@@ -34,6 +34,7 @@ screening-api = "voiceagent.api.app:main"
 screening-worker = "voiceagent.worker.main:main"
 screening-eval = "voiceagent.evals.cli:main"
 screening-demo-seed = "voiceagent.demo:main"
+decision-bench = "voiceagent.evals.bench.cli:main"
 
 [dependency-groups]
 dev = [
