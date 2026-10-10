@@ -3,6 +3,7 @@
 import csv
 import io
 import uuid
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -197,6 +198,31 @@ def delete_candidate(candidate_id: uuid.UUID, session: DB) -> Response:
     return Response(status_code=204)
 
 
+def set_excluded(session: Session, candidate_id: uuid.UUID, excluded: bool) -> Candidate:
+    candidate = get_candidate(session, candidate_id, lock=True)
+    if (candidate.excluded_at is not None) != excluded:
+        candidate.excluded_at = datetime.now(UTC) if excluded else None
+        event = "excluded" if excluded else "included"
+        emit(session, "candidate", candidate.id, event, {"job_id": str(candidate.job_id)})
+    session.commit()
+    return candidate
+
+
+@router.post("/candidates/{candidate_id}:exclude", response_model=CandidateOut)
+def exclude_candidate(candidate_id: uuid.UUID, session: DB) -> Candidate:
+    """Stop calling the candidate: campaigns skip them and POST /candidates/{id}/call is
+    refused. Their status and history stay as they are; a call already queued or in
+    progress isn't stopped."""
+    return set_excluded(session, candidate_id, True)
+
+
+@router.post("/candidates/{candidate_id}:include", response_model=CandidateOut)
+def include_candidate(candidate_id: uuid.UUID, session: DB) -> Candidate:
+    """Resume calling the candidate. A campaign that finished meanwhile needs starting
+    again."""
+    return set_excluded(session, candidate_id, False)
+
+
 @router.post("/candidates/{candidate_id}/call", status_code=202, response_model=CallOut)
 def call_candidate(candidate_id: uuid.UUID, session: DB, body: CallRequest | None = None) -> Call:
     """Queue a call now, whatever the hour: calling hours, retries and callbacks are the
@@ -205,6 +231,10 @@ def call_candidate(candidate_id: uuid.UUID, session: DB, body: CallRequest | Non
     A candidate who was already screened, declined or withdrew is only called again with
     `{"force": true}`."""
     candidate = get_candidate(session, candidate_id, lock=True)  # one request at a time
+    if candidate.excluded_at is not None:
+        raise HTTPException(
+            status_code=409, detail="calling is stopped for this candidate: resume calling first"
+        )
     if candidate.status in FINISHED_CANDIDATE_STATUSES and not (body and body.force):
         raise HTTPException(
             status_code=409,

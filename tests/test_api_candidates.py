@@ -1,4 +1,6 @@
 import json
+import uuid
+from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,7 +19,7 @@ from tests.test_postcall import drain, replies
 from voiceagent.api.app import create_app
 from voiceagent.api.candidates import MAX_IMPORT_BYTES, parse_candidates_csv
 from voiceagent.db.base import make_sessionmaker
-from voiceagent.db.models import Call, Candidate, Decision, Event, Job, Knowledge
+from voiceagent.db.models import Call, Candidate, Decision, Event, Job, Knowledge, Task
 from voiceagent.knowledge.store import index_override
 from voiceagent.worker.queue import enqueue
 
@@ -248,3 +250,34 @@ def test_delete_removes_the_candidates_quotes_from_calibration(client, session):
     session.expire_all()
     assert session.scalars(select(Knowledge)).all() == []
     assert session.scalars(select(Decision)).all() == []
+
+
+def test_stop_and_resume_calling_a_candidate(client, session):
+    job, _ = seed_job(session)
+    candidate = seed_candidate(session, job, status="no_answer")
+    r = client.post(f"/candidates/{candidate.id}:exclude", headers=KEY)
+    assert r.status_code == 200
+    assert r.json()["excluded_at"] is not None
+    assert r.json()["status"] == "no_answer"  # status and history stay as they were
+    client.post(f"/candidates/{candidate.id}:exclude", headers=KEY)  # a double-click
+    r = client.post(f"/candidates/{candidate.id}:include", headers=KEY)
+    assert r.status_code == 200 and r.json()["excluded_at"] is None
+    events = session.scalars(select(Event).order_by(Event.id))
+    assert [(e.type, e.data) for e in events] == [
+        ("excluded", {"job_id": str(job.id)}),
+        ("included", {"job_id": str(job.id)}),
+    ]
+
+
+@pytest.mark.parametrize("body", [None, {"force": True}])
+def test_an_excluded_candidate_is_never_called_by_hand(client, session, body):
+    # Review focus 3: "Stop calling" holds even against force.
+    job, _ = seed_job(session)
+    candidate = seed_candidate(session, job, excluded_at=datetime.now(UTC))
+    r = client.post(f"/candidates/{candidate.id}/call", headers=KEY, json=body)
+    assert r.status_code == 409 and "resume calling" in r.json()["detail"]
+    assert session.scalars(select(Task)).all() == []
+
+
+def test_excluding_an_unknown_candidate_is_404(client):
+    assert client.post(f"/candidates/{uuid.uuid4()}:exclude", headers=KEY).status_code == 404

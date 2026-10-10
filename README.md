@@ -251,6 +251,7 @@ uv run voiceagent dev        # the call agent; reads screening calls from DATABA
 | `POST /jobs/{id}/candidates` · `:import` | add a candidate, or upload a CSV (`Content-Type: text/csv`; columns name, email, phone or sip_address, resume_text) |
 | `GET /jobs/{id}/candidates` · `GET / DELETE /candidates/{id}` | list, read, delete (deletes their calls and transcripts) |
 | `POST /candidates/{id}/call` | ring the candidate now (job active, criteria approved) |
+| `POST /candidates/{id}:exclude` · `:include` | stop or resume calling a candidate: campaigns skip them and a manual call is refused; status and history are unchanged |
 | `POST /jobs/{id}/campaign` · `:pause` | start (or resume) calling the job's candidates, `{"max_concurrent"?}` 1-10; pause stops new calls, calls in progress finish |
 | `GET /jobs/{id}/campaign` | campaign status, calls in flight, candidates per status |
 | `GET /calls/{id}` · `GET /candidates/{id}/calls` | status, end reason, transcript |

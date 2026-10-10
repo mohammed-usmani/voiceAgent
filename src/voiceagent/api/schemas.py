@@ -179,6 +179,7 @@ class CandidateOut(BaseModel):
     sip_address: str | None
     resume_text: str
     status: str
+    excluded_at: datetime | None
     created_at: datetime
 
 

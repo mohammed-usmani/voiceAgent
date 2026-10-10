@@ -136,7 +136,8 @@ MAX_UNANSWERED = 3
 class Candidate(Timestamps, Base):
     """Someone to screen for a job. Status: pending → calling → screened → decided →
     notified, or no_answer, callback, declined_consent, withdrawn, unreachable (MAX_UNANSWERED
-    calls nobody answered)."""
+    calls nobody answered). A recruiter can stop calling them (`excluded_at`) without
+    changing their status."""
 
     __tablename__ = "candidates"
     __table_args__ = (
@@ -153,6 +154,9 @@ class Candidate(Timestamps, Base):
     sip_address: Mapped[str | None] = mapped_column(String(200))
     resume_text: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(30), default="pending")
+    # Set while a recruiter has stopped calling them: campaigns skip them and a manual call
+    # is refused. Their status and history are untouched.
+    excluded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Call(Timestamps, Base):

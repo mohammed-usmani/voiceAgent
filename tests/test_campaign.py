@@ -6,7 +6,7 @@ from tests.seed import seed_call, seed_candidate, seed_job
 from voiceagent.call.store import queue_call
 from voiceagent.db.base import make_sessionmaker
 from voiceagent.db.models import Call, Campaign, Candidate, Event, Task
-from voiceagent.worker.campaign import RETRY_GAP, tick
+from voiceagent.worker.campaign import RETRY_GAP, call_if_due, tick
 
 IST = timedelta(hours=5, minutes=30)
 
@@ -227,3 +227,27 @@ def test_a_campaign_another_worker_is_ticking_is_skipped(engine, session):
         other.rollback()
         other.close()
     assert tick(session, NOW) == 1
+
+
+def test_a_campaign_skips_excluded_candidates(session):
+    job, _ = campaign_job(session, max_concurrent=5)
+    person(session, job, 0)
+    person(session, job, 1, excluded_at=NOW - timedelta(hours=1))
+    assert tick(session, NOW) == 1
+    [call] = queued_calls(session)
+    assert session.get(Candidate, call.candidate_id).name == "Candidate 0"
+
+
+def test_a_candidate_excluded_after_the_tick_read_them_is_not_called(session):
+    job, cv = campaign_job(session)
+    candidate = person(session, job, 0, excluded_at=NOW)
+    assert call_if_due(session, job, cv, candidate.id, NOW) == 0
+    assert queued_calls(session) == []
+
+
+def test_a_campaign_with_only_excluded_candidates_left_is_done(session):
+    # Resume calling doesn't reopen it: the recruiter starts the campaign again.
+    job, _ = campaign_job(session)
+    person(session, job, 0, excluded_at=NOW)
+    assert tick(session, NOW) == 0
+    assert session.get(Campaign, job.id).status == "done"

@@ -106,7 +106,11 @@ def run_campaign(session: Session, campaign: Campaign, now: datetime) -> int:
     waiting = list(
         session.scalars(
             select(Candidate)
-            .where(Candidate.job_id == job.id, Candidate.status.in_(CAMPAIGN_STATUSES))
+            .where(
+                Candidate.job_id == job.id,
+                Candidate.status.in_(CAMPAIGN_STATUSES),
+                Candidate.excluded_at.is_(None),
+            )
             .order_by(Candidate.created_at, Candidate.id)
         )
     )
@@ -139,7 +143,7 @@ def call_if_due(
     """Queue a call to one candidate if, under their row lock, it is still due and allowed
     now. Returns 1 if a call was queued."""
     candidate = session.get(Candidate, candidate_id, with_for_update=True, populate_existing=True)
-    if candidate is None:  # deleted meanwhile
+    if candidate is None or candidate.excluded_at is not None:  # deleted or excluded meanwhile
         return 0
     calls = calls_by_candidate(session, [candidate.id])[candidate.id]
     when = next_call_at(candidate.status, calls)
