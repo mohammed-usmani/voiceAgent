@@ -1,12 +1,15 @@
 # voiceagent
 
-A LiveKit phone voice agent that runs job pre-screening calls, and logs every
-turn-taking decision it makes, so you can see exactly where it cuts callers off,
-leaves dead air, or mishandles interruptions.
+An AI phone-screening backend. A recruiter posts a job; an agent drafts what the call
+should check and the recruiter approves it; a LiveKit voice agent calls the candidates;
+an assessment agent decides who is suitable, invites them, and leaves every rejection for
+a recruiter to approve. The voice agent logs every turn-taking decision it makes, so you
+can see exactly where it cuts callers off, leaves dead air, or mishandles interruptions.
 
-Aria, a recruiter at a fictional company, calls a shortlisted applicant (or takes their
-call), confirms their current role, experience, notice period, salary and work setup, and
-books a slot for their final interview.
+A call that isn't a screening call (someone phoning in, `voiceagent console`) is the
+original demo: Aria, a recruiter at a fictional company, confirms an applicant's current
+role, experience, notice period, salary and work setup, and books a slot for their final
+interview. See [Screening backend](#screening-backend) for the API.
 
 ## Results
 
@@ -173,16 +176,19 @@ Linphone server didn't answer over UDP.
 | [`backchannel.py`](src/voiceagent/backchannel.py) | Which utterances are backchannels ("yeah", "uh-huh") |
 | [`outbound.py`](src/voiceagent/outbound.py) | `voiceagent-call`: have the agent call a SIP address |
 | [`call/`](src/voiceagent/call) | Screening calls: prompt from criteria, `end_call`, saving the result, text-mode harness |
+| [`agents/criteria.py`](src/voiceagent/agents/criteria.py) | Job description → screening criteria: draft, ground, critique, revise |
+| [`knowledge/store.py`](src/voiceagent/knowledge/store.py) | pgvector store of approved criteria and recruiter overrides |
+| [`api/`](src/voiceagent/api) | `screening-api`: jobs, criteria, candidates, calls, campaigns, decisions, messages, events |
+| [`worker/`](src/voiceagent/worker) | `screening-worker`: task queue in Postgres, dialing, post-call assessment, email, campaign tick |
 | [`agents/assessment.py`](src/voiceagent/agents/assessment.py) | After the call: evidence, rules, soft scores, reviewer → decision |
 | [`agents/messages.py`](src/voiceagent/agents/messages.py) | Invite / rejection writer with a checker |
 | [`rules.py`](src/voiceagent/rules.py) | Deterministic hard-requirement rules and decision thresholds |
 | [`outcomes/email.py`](src/voiceagent/outcomes/email.py) | SMTP mailer (development: log only) |
 | [`evals/`](src/voiceagent/evals) | `screening-eval`: reference jobs, simulated candidates, metrics, run report |
 
-## Screening backend (in progress)
+## Screening backend
 
-The agent is being turned into a backend for AI phone screening: a recruiter pastes a job
-description, and a criteria agent (LangGraph) drafts what the call should check, grounds
+A recruiter pastes a job description, and a criteria agent (LangGraph) drafts what the call should check, grounds
 every requirement in the description's own words, has a critic check it for legality and
 phone-checkability, and revises until it passes. Approved criteria are indexed in pgvector
 and ground future jobs.
