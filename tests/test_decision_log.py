@@ -1,6 +1,8 @@
 import io
 import json
 
+import pytest
+
 from voiceagent.decision_log import DecisionTracker
 
 
@@ -192,3 +194,14 @@ def test_redacted_log_keeps_timings_but_no_words(tmp_path):
     [record] = [json.loads(line) for line in text.splitlines()]
     assert (record["outcome"], record["eot_delay_ms"]) == ("respond", 400)
     assert "salary" not in text and "Infosys" not in text
+
+
+def test_each_written_record_is_also_handed_to_on_record():
+    got = []
+    tr = DecisionTracker(Sink(), t0=100.0, on_record=got.append)
+    tr.user_started(100.0)
+    tr.user_stopped(101.0)
+    tr.agent_state("thinking", 101.3)
+    tr.close(110.0)
+    assert [(r["kind"], r["outcome"]) for r in got] == [("pause", "respond")]
+    assert got[0]["eot_delay_ms"] == pytest.approx(300, abs=1)  # float subtraction

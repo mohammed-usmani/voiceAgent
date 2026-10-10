@@ -9,6 +9,7 @@ flagged in ``suspect`` for the reviewer; nothing here decides correctness.
 
 import json
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -61,12 +62,20 @@ def suspect_for(p: Point) -> str | None:
 
 
 class DecisionTracker:
-    def __init__(self, out: TextIO, t0: float, *, redact: bool = False) -> None:
+    def __init__(
+        self,
+        out: TextIO,
+        t0: float,
+        *,
+        redact: bool = False,
+        on_record: Callable[[dict], None] | None = None,
+    ) -> None:
         self._out = out
         self._t0 = t0
         # Timings and outcomes only, no words: a screening call's speech lives in its
         # transcript, which DELETE purges; this file it can't reach.
         self._redact = redact
+        self._on_record = on_record  # also gets each record as it is written
         self._points: list[Point] = []
         self._pause: Point | None = None  # open pause
         self._committed: Point | None = None  # latest respond, for cut-off / reply delay
@@ -77,12 +86,19 @@ class DecisionTracker:
         self._interim = ""
 
     @classmethod
-    def open(cls, room: str, log_dir: Path = LOG_DIR, *, redact: bool = False) -> "DecisionTracker":
+    def open(
+        cls,
+        room: str,
+        log_dir: Path = LOG_DIR,
+        *,
+        redact: bool = False,
+        on_record: Callable[[dict], None] | None = None,
+    ) -> "DecisionTracker":
         log_dir.mkdir(parents=True, exist_ok=True)
         now = time.time()
         stamp = datetime.fromtimestamp(now).strftime("%Y%m%d-%H%M%S")
         path = log_dir / f"{stamp}-{room}.jsonl"
-        return cls(path.open("a", buffering=1), t0=now, redact=redact)
+        return cls(path.open("a", buffering=1), t0=now, redact=redact, on_record=on_record)
 
     # -- caller ---------------------------------------------------------------
 
@@ -190,6 +206,8 @@ class DecisionTracker:
             if self._redact:
                 record["transcript"] = record["agent_before"] = ""
             self._out.write(json.dumps(record) + "\n")
+            if self._on_record is not None:
+                self._on_record(record)
             p._written = True
 
 

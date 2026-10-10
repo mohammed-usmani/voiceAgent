@@ -12,6 +12,7 @@ from livekit.agents import AMD, Agent, AgentServer, AgentSession, JobContext, in
 from livekit.agents.voice.events import CloseEvent, CloseReason
 from livekit.plugins import cartesia, deepgram, noise_cancellation, silero
 
+from voiceagent.call.live import TURNS_TOPIC, RoomPublisher, publish_progress, turn_record
 from voiceagent.call.prompt import APOLOGY, build_instructions, greeting
 from voiceagent.call.screening import ScreeningAgent, call_id_from, transcript
 from voiceagent.call.store import (
@@ -262,8 +263,14 @@ async def entrypoint(ctx: JobContext) -> None:
     log_reply_stages(session)
 
     # Screening calls log turn timings only: what the candidate says stays in the call's
-    # transcript, which deleting the candidate purges.
-    tracker = DecisionTracker.open(ctx.room.name, redact=screening)
+    # transcript, which deleting the candidate purges. The live view (a hidden viewer in the
+    # room) gets the same timings, never words, plus question progress on screening calls.
+    publisher = RoomPublisher(ctx.room)
+    tracker = DecisionTracker.open(
+        ctx.room.name,
+        redact=screening,
+        on_record=lambda record: publisher.publish(TURNS_TOPIC, turn_record(record)),
+    )
     watch(session, tracker)
 
     async def close_log() -> None:
@@ -273,6 +280,7 @@ async def entrypoint(ctx: JobContext) -> None:
 
     if loaded is not None:
         job = loaded.job
+        publish_progress(session, publisher, loaded.criteria.requirements)
         agent = ScreeningAgent(
             instructions=build_instructions(
                 job, loaded.candidate, loaded.criteria, now=datetime.now(ZoneInfo(job.timezone))

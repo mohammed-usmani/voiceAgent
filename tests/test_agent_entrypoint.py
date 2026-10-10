@@ -1,6 +1,7 @@
 """agent.entrypoint with fakes for the job, the session and the database: which agent a
 dispatch gets, what is said, and what is saved when the call ends."""
 
+import asyncio
 import json
 import uuid
 from types import SimpleNamespace
@@ -54,10 +55,18 @@ class FakeSession:
         self.handlers["close"](SimpleNamespace(error=error, reason=reason))
 
 
+class FakeParticipant:
+    def __init__(self) -> None:
+        self.published: list = []
+
+    async def publish_data(self, payload, *, reliable=True, topic=""):
+        self.published.append((topic, json.loads(payload)))
+
+
 class FakeCtx:
     def __init__(self, metadata: str) -> None:
         self.job = SimpleNamespace(metadata=metadata)
-        self.room = SimpleNamespace(name="screen-abc")
+        self.room = SimpleNamespace(name="screen-abc", local_participant=FakeParticipant())
         self.callbacks = []
 
     async def connect(self):
@@ -76,8 +85,9 @@ class FakeTracker:
     opened: list = []
 
     @classmethod
-    def open(cls, room, *, redact=False):
+    def open(cls, room, *, redact=False, on_record=None):
         cls.opened.append((room, redact))
+        cls.on_record = on_record
         return cls()
 
     def close(self, t):
@@ -307,3 +317,19 @@ async def test_nobody_answering_is_not_taken_for_a_person(monkeypatch):
     session = AMDSession()
     assert await agent_module.answered_by_machine(session) is None
     assert session.log == ["amd closed"]
+
+
+async def test_a_screening_call_publishes_question_progress_and_turn_timings(fakes):
+    _, state = fakes
+    ctx = FakeCtx(metadata())
+    await agent_module.entrypoint(ctx)
+    asked = SimpleNamespace(role="assistant", text_content=CRITERIA.requirements[0].question)
+    state.session.handlers["conversation_item_added"](SimpleNamespace(item=asked))
+    FakeTracker.on_record(
+        {"i": 0, "kind": "pause", "t": 1.2, "transcript": "five years", "outcome": "respond"}
+    )
+    await asyncio.sleep(0)
+    assert ctx.room.local_participant.published == [
+        ("screening.progress", {"asking": "python_years", "asked": ["python_years"]}),
+        ("screening.turns", {"i": 0, "kind": "pause", "t": 1.2, "outcome": "respond"}),
+    ]

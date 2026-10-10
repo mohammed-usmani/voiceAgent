@@ -204,6 +204,12 @@ tool, `end_call`. The transcript and end reason are saved on the call. A call th
 without a screening call id (someone phoning in, `voiceagent console`) is still the
 Nimbus Labs demo.
 
+For the live view, the agent publishes into the call's room: after each of its turns,
+`screening.progress` `{"asking": requirement_id | null, "asked": [...]}` (its words matched
+to the approved questions by plain word overlap, a guide rather than a record), and for
+every turn-taking record the decision log writes, `screening.turns` with its timings and
+outcome, never words. A failed publish is logged and the call goes on.
+
 A campaign calls a job's candidates in the background. Once a minute the worker queues the
 calls that are due, inside the job's calling hours in its timezone (daylight saving
 included), at most `max_concurrent` (default 2) of the job's calls at once, manual calls
