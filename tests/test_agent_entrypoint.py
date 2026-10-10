@@ -288,3 +288,22 @@ async def test_a_failing_detector_greets_as_if_a_person_answered(monkeypatch):
     monkeypatch.setattr(FakeAMD, "error", ValueError("AMD classifier could not be resolved"))
     monkeypatch.setattr(agent_module, "AMD", FakeAMD)
     assert await agent_module.answered_by_machine(AMDSession()) is False
+
+
+async def test_nobody_answering_is_not_taken_for_a_person(monkeypatch):
+    # The agent waits in the room while the phone rings; if it rings out, AMD settles as
+    # "participant_missing", which must not greet an empty line.
+    class RangOut(FakeAMD):
+        async def execute(self):
+            return AMDPredictionEvent(
+                speech_duration=0.0,
+                category=AMDCategory.UNCERTAIN,
+                reason="participant_missing",
+                transcript="",
+                delay=0.0,
+            )
+
+    monkeypatch.setattr(agent_module, "AMD", RangOut)
+    session = AMDSession()
+    assert await agent_module.answered_by_machine(session) is None
+    assert session.log == ["amd closed"]

@@ -38,6 +38,7 @@ class FakeLiveKit:
         self.closed = False
         self.options = None
         self.dispatch_error = None
+        self.ring_error = None
         self.deleted_rooms = []
         self.sip = SimpleNamespace(
             list_outbound_trunk=self._trunks,
@@ -59,6 +60,8 @@ class FakeLiveKit:
         return SimpleNamespace(items=[trunk])
 
     async def _record(self, req):
+        if self.ring_error:
+            raise self.ring_error
         self.requests.append(req)
 
     async def aclose(self):
@@ -84,7 +87,9 @@ async def test_dial_sip_address_dispatches_the_agent_with_metadata(livekit):
         display_name="Acme Hiring",
         metadata='{"call_id": "x"}',
     )
-    participant, dispatch = livekit.requests
+    # A screening call: the agent is in the room before the phone rings, so it hears the
+    # first "Hello?" (it says nothing until its answering-machine check hears the pickup).
+    dispatch, participant = livekit.requests
     assert (participant.sip_trunk_id, participant.sip_call_to, participant.room_name) == (
         "ST_linphone",
         "priya",
@@ -133,3 +138,19 @@ async def test_a_sip_address_with_a_phone_style_user_goes_to_its_host(livekit, m
     await outbound.dial("+15551234@sip.linphone.org", "screen-6")
     participant = livekit.requests[0]
     assert (participant.sip_trunk_id, participant.sip_call_to) == ("ST_linphone", "+15551234")
+
+
+async def test_an_unanswered_screening_call_closes_the_room_the_agent_waits_in(livekit):
+    livekit.ring_error = RuntimeError("486 busy")
+    with pytest.raises(RuntimeError, match="busy"):
+        await outbound.dial("priya@sip.linphone.org", "screen-7", metadata='{"call_id": "x"}')
+    [dispatch] = livekit.requests
+    assert dispatch.room == "screen-7"
+    assert livekit.deleted_rooms == ["screen-7"] and livekit.closed
+
+
+async def test_the_demo_agent_is_sent_in_only_after_pickup(livekit):
+    # It greets as soon as it joins, so it must not join while the phone rings.
+    await outbound.dial("priya@sip.linphone.org", "call-out-1")
+    participant, dispatch = livekit.requests
+    assert participant.room_name == dispatch.room == "call-out-1"

@@ -43,7 +43,7 @@ def dial_request(
         participant_identity="candidate",
         participant_name="Candidate",
         display_name=display_name,
-        # Dispatch the agent only after pickup, so its greeting isn't spoken to a ringtone.
+        # Returns once they answer, and raises if they don't.
         wait_until_answered=True,
     )
 
@@ -71,7 +71,7 @@ async def trunk_for(lk: api.LiveKitAPI, host: str) -> str:
 async def dial(
     address: str, room: str, *, display_name: str = CALLER_NAME, metadata: str = ""
 ) -> None:
-    """Ring `address` and, once answered, send the agent into `room` with `metadata`.
+    """Ring `address` and have the agent take the call in `room`, with `metadata`.
 
     `address` is a phone number (+E.164, through the trunk in SIP_OUTBOUND_TRUNK_ID) or a
     SIP address, anything with an "@" (through a per-host trunk created on first use).
@@ -91,11 +91,27 @@ async def dial(
         else:
             to, host = parse_address(address)
             trunk_id = await trunk_for(lk, host)
-        await lk.sip.create_sip_participant(dial_request(trunk_id, to, room, display_name))
+        ring = dial_request(trunk_id, to, room, display_name)
+        dispatch = api.CreateAgentDispatchRequest(
+            agent_name=AGENT_NAME, room=room, metadata=metadata
+        )
+        if metadata:
+            # A screening call: the agent joins while the phone rings, so it is listening the
+            # moment they answer; its answering-machine detection waits for the pickup before
+            # anything is said. Sent in after pickup, it took ~2.5 s to join.
+            await lk.agent_dispatch.create_dispatch(dispatch)
+            try:
+                await lk.sip.create_sip_participant(ring)
+            except Exception:
+                # Nobody answered: close the room so the waiting agent leaves.
+                with contextlib.suppress(Exception):
+                    await lk.room.delete_room(api.DeleteRoomRequest(room=room))
+                raise
+            return
+        # The demo agent greets as soon as it joins: send it in only after pickup.
+        await lk.sip.create_sip_participant(ring)
         try:
-            await lk.agent_dispatch.create_dispatch(
-                api.CreateAgentDispatchRequest(agent_name=AGENT_NAME, room=room, metadata=metadata)
-            )
+            await lk.agent_dispatch.create_dispatch(dispatch)
         except Exception:
             # They answered but no agent is coming: hang up rather than leave them on a
             # silent line. The dispatch error is the one worth raising.

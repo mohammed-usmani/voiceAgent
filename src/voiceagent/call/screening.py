@@ -53,7 +53,7 @@ class ScreeningAgent(ReliableAgent):
         hang_up: Callable[..., object] | None = None,
         backup: llm.LLM | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
-        detect_machine: Callable[[], Awaitable[bool]] | None = None,
+        detect_machine: Callable[[], Awaitable[bool | None]] | None = None,
     ) -> None:
         super().__init__(instructions=instructions, backup=backup)
         self.greeting = greeting
@@ -64,12 +64,19 @@ class ScreeningAgent(ReliableAgent):
         self._clock = clock
         # Listens to the line before the greeting: True when a machine answered (agent.py
         # runs LiveKit's answering-machine detection, and drops any reply to a "Hello?"
-        # heard meanwhile). None: always greet (text mode).
+        # heard meanwhile), None when nobody answered. No detector: always greet (text mode).
         self._detect_machine = detect_machine
 
     async def on_enter(self) -> None:
         if self._detect_machine is not None:
-            if await self._detect_machine():
+            verdict = await self._detect_machine()
+            if verdict is None:
+                # The phone rang out while the agent waited in the room: say nothing; the
+                # dialer records the call as unanswered.
+                if self._hang_up is not None:
+                    self._hang_up(drain=False)
+                return
+            if verdict:
                 # Voicemail or an automated menu: leave no message, just hang up without
                 # playing anything still queued; a campaign tries again later.
                 self.outcome = CallOutcome("voicemail")

@@ -74,6 +74,18 @@ async def test_a_machine_hears_nothing_and_the_call_ends():
     assert hung_up == [{"drain": False}]  # nothing still queued plays into the voicemail
 
 
+async def test_a_call_nobody_answered_says_nothing_and_leaves_no_outcome():
+    async def rang_out() -> None:
+        return None
+
+    model = ScriptedLLM(["This must never be said."])
+    hung_up = []
+    agent = make_agent(model, detect_machine=rang_out, hang_up=lambda **kw: hung_up.append(kw))
+    result = await run_text_call(agent, model, [])
+    assert (result.outcome, result.transcript, model.requests) == (None, [], [])
+    assert hung_up == [{"drain": False}]
+
+
 async def test_a_person_is_greeted_once_detection_says_so():
     async def person() -> bool:
         return False

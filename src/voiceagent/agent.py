@@ -128,18 +128,19 @@ def room_options() -> room_io.RoomOptions:
     )
 
 
-# Answering-machine detection. Detection starts once the agent has joined, after pickup,
-# so a person's first "Hello?" may already be over: silence this long means "unsure",
-# which greets, rather than LiveKit's 10 s default. TIMEOUT caps the wait for a verdict
-# (wait_until_finished=False: even while the line is still talking).
-AMD_NO_SPEECH_S = 3.0
+# Answering-machine detection. The agent joins a screening call while it rings and
+# detection starts at pickup, so a "Hello?" settles it as a person in about 0.5 s; a person
+# who waits silently for us is greeted after this much silence ("unsure"), rather than
+# LiveKit's 10 s default (3 s felt long on a real call). TIMEOUT caps the wait for a
+# verdict (wait_until_finished=False: even while the line is still talking).
+AMD_NO_SPEECH_S = 2.0
 AMD_TIMEOUT_S = 8.0
 
 
-async def answered_by_machine(session: AgentSession) -> bool:
+async def answered_by_machine(session: AgentSession) -> bool | None:
     """LiveKit's answering-machine detection on what the line says after pickup: True for
-    voicemail or an automated menu. Unsure, or detection failing, counts as a person, so a
-    candidate is never hung up on for it."""
+    voicemail or an automated menu, None when nobody ever answered. Unsure, or detection
+    failing, counts as a person, so a candidate is never hung up on for it."""
     try:
         async with AMD(
             session,
@@ -151,6 +152,9 @@ async def answered_by_machine(session: AgentSession) -> bool:
             wait_until_finished=False,
         ) as detector:
             result = await detector.execute()
+            if result.reason == "participant_missing":
+                logger.info("answering-machine detection: nobody answered")
+                return None
             if not result.is_machine:
                 # execute() lets the agent speak again: drop a reply to a "Hello?" heard
                 # while listening before it plays, so nothing comes before the disclosure.
