@@ -1,8 +1,11 @@
+import time
 import uuid
 from datetime import UTC, datetime, timedelta
 
+import jwt
 import pytest
 from fastapi.testclient import TestClient
+from livekit import api
 from sqlalchemy import select, update
 
 from tests.fakes import FakeModels
@@ -141,3 +144,97 @@ def test_a_failed_call_after_a_callback_request_keeps_the_callback(client, sessi
     session.commit()
     session.expire_all()
     assert session.get(Candidate, candidate.id).status == "callback"
+
+
+LIVEKIT = {
+    "LIVEKIT_URL": "wss://demo.livekit.cloud",
+    "LIVEKIT_API_KEY": "APIdemo",
+    "LIVEKIT_API_SECRET": "s" * 32,
+}
+
+
+@pytest.fixture
+def livekit(monkeypatch):
+    for name, value in LIVEKIT.items():
+        monkeypatch.setenv(name, value)
+
+
+def test_live_calls_list_names_the_candidate_and_job(client, session):
+    job, cv = seed_job(session)
+    live = seed_call(
+        session,
+        seed_candidate(session, job),
+        cv,
+        status="in_progress",
+        room="screen-live",
+        started_at=datetime.now(UTC),
+    )
+    other = seed_candidate(session, job, name="Arjun Rao", email="arjun@example.com")
+    seed_call(session, other, cv, status="completed")
+    r = client.get("/calls?status=in_progress", headers=KEY)
+    assert r.status_code == 200
+    [row] = r.json()
+    assert (row["id"], row["candidate_name"], row["job_id"], row["job_title"]) == (
+        str(live.id),
+        "Priya Sharma",
+        str(job.id),
+        "Backend Engineer",
+    )
+    assert (row["room"], row["status"]) == ("screen-live", "in_progress")
+    assert row["started_at"] is not None
+
+
+def test_calls_filter_by_several_statuses_and_by_job(client, session):
+    job, cv = seed_job(session)
+    other_job, other_cv = seed_job(session, title="Data Analyst")
+    ringing = seed_call(session, seed_candidate(session, job), cv, status="ringing", room="r1")
+    seed_call(
+        session, seed_candidate(session, other_job), other_cv, status="in_progress", room="r2"
+    )
+    r = client.get(f"/calls?status=ringing&status=in_progress&job_id={job.id}", headers=KEY)
+    assert [c["id"] for c in r.json()] == [str(ringing.id)]
+    assert len(client.get("/calls?status=ringing&status=in_progress", headers=KEY).json()) == 2
+
+
+def test_viewer_token_can_only_watch(client, session, livekit):
+    # Review focus 2: whoever holds the token can listen in but never speak into the call.
+    job, cv = seed_job(session)
+    call = seed_call(
+        session, seed_candidate(session, job), cv, status="in_progress", room="screen-abc123"
+    )
+    r = client.post(f"/calls/{call.id}/viewer-token", headers=KEY)
+    assert r.status_code == 200
+    body = r.json()
+    assert (body["url"], body["room"]) == ("wss://demo.livekit.cloud", "screen-abc123")
+    claims = api.TokenVerifier(LIVEKIT["LIVEKIT_API_KEY"], LIVEKIT["LIVEKIT_API_SECRET"]).verify(
+        body["token"]
+    )
+    v = claims.video
+    assert (v.room_join, v.room, v.can_subscribe) == (True, "screen-abc123", True)
+    assert (v.can_publish, v.can_publish_data, v.hidden) == (False, False, True)
+    assert claims.identity.startswith("viewer-")
+    expires = jwt.decode(body["token"], options={"verify_signature": False})["exp"]
+    assert 3500 < expires - time.time() <= 3600
+
+
+@pytest.mark.parametrize(
+    ("status", "room"),
+    [("queued", ""), ("completed", "screen-abc123"), ("no_answer", "screen-abc123")],
+)
+def test_viewer_token_only_for_a_call_with_a_live_room(client, session, livekit, status, room):
+    job, cv = seed_job(session)
+    call = seed_call(session, seed_candidate(session, job), cv, status=status, room=room)
+    assert client.post(f"/calls/{call.id}/viewer-token", headers=KEY).status_code == 409
+
+
+def test_viewer_token_for_an_unknown_call_is_404(client, livekit):
+    assert client.post(f"/calls/{uuid.uuid4()}/viewer-token", headers=KEY).status_code == 404
+
+
+def test_viewer_token_needs_livekit_settings(client, session, monkeypatch):
+    for name in LIVEKIT:
+        monkeypatch.delenv(name, raising=False)
+    job, cv = seed_job(session)
+    call = seed_call(session, seed_candidate(session, job), cv, status="ringing", room="r1")
+    r = client.post(f"/calls/{call.id}/viewer-token", headers=KEY)
+    assert r.status_code == 503 and "LIVEKIT_URL" in r.json()["detail"]

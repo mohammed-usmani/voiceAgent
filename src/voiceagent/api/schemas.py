@@ -207,6 +207,25 @@ class CallOut(BaseModel):
     created_at: datetime
 
 
+class CallListItem(BaseModel):
+    id: uuid.UUID
+    candidate_id: uuid.UUID
+    candidate_name: str
+    job_id: uuid.UUID
+    job_title: str
+    room: str
+    status: str
+    attempt: int
+    started_at: datetime | None
+    created_at: datetime
+
+
+class ViewerToken(BaseModel):
+    url: str = Field(description="the LiveKit server to connect to")
+    token: str = Field(description="subscribe-only and hidden; valid for an hour")
+    room: str
+
+
 class RowError(BaseModel):
     row: int = Field(description="spreadsheet row; the header is row 1")
     errors: list[str]

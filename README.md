@@ -254,6 +254,8 @@ uv run voiceagent dev        # the call agent; reads screening calls from DATABA
 | `POST /jobs/{id}/campaign` · `:pause` | start (or resume) calling the job's candidates, `{"max_concurrent"?}` 1-10; pause stops new calls, calls in progress finish |
 | `GET /jobs/{id}/campaign` | campaign status, calls in flight, candidates per status |
 | `GET /calls/{id}` · `GET /candidates/{id}/calls` | status, end reason, transcript |
+| `GET /calls?status=&job_id=` | calls with their candidate and job, newest first; e.g. `?status=in_progress` for the live ones |
+| `POST /calls/{id}/viewer-token` | `{url, token, room}`: a hidden, subscribe-only LiveKit token (1 h) to watch a ringing or live call |
 | `GET /decisions?job_id=&status=` · `GET /decisions/{id}` | the review queue; a decision with its answers, reasons, reviewer notes and drafted message |
 | `POST /decisions/{id}:approve` | send the drafted message (also retries a failed send); `{"force": true}` if the candidate was already notified or has a newer decision |
 | `POST /decisions/{id}:override` | `{"result", "note", "requirement_ids"?}`: the recruiter's call; re-drafts the message and calibrates future scoring on the named answers. The note is shown to the scorer for other candidates: keep names and personal details out of it |
