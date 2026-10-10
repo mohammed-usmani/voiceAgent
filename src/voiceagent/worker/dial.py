@@ -8,6 +8,7 @@ parallel, or make dialing async if that is too slow.
 import asyncio
 import json
 import logging
+import os
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -46,6 +47,14 @@ def dial_outcome(error: Exception) -> str:
     return "failed"
 
 
+def address_for(candidate: Candidate) -> str:
+    """The phone number, unless it can't be rung (no outbound trunk) and there is a SIP
+    address to ring instead. A number alone is still dialled, and fails saying why."""
+    if candidate.phone and (os.environ.get("SIP_OUTBOUND_TRUNK_ID") or not candidate.sip_address):
+        return candidate.phone
+    return candidate.sip_address
+
+
 def dial(session: Session, models: Models, task: Task) -> None:
     call = lock_call(session, uuid.UUID(task.payload["call_id"]))
     if call is None:  # the candidate was deleted while the call was queued
@@ -63,7 +72,7 @@ def dial(session: Session, models: Models, task: Task) -> None:
     emit(session, "call", call.id, "ringing")
     session.commit()  # visible before the slow dial, so a rerun can tell it already rang
 
-    address = candidate.phone or candidate.sip_address
+    address = address_for(candidate)
     metadata = json.dumps({"call_id": str(call.id)})
     try:
         DIALER(address, call.room, f"{job.company_name} Hiring", metadata)

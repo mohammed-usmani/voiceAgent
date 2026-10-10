@@ -142,3 +142,18 @@ def test_dial_task_out_of_attempts_marks_the_call_failed(engine, session, monkey
     run(engine, monkeypatch, FakeDialer())
     session.expire_all()
     assert session.get(Call, call.id).status == "failed"
+
+
+@pytest.mark.parametrize(
+    ("trunk", "dialled"), [("", "priya@sip.linphone.org"), ("ST_pstn", "+919876543210")]
+)
+def test_with_both_a_phone_and_a_sip_address_the_phone_needs_a_trunk(
+    engine, session, monkeypatch, trunk, dialled
+):
+    # A phone number can only be rung through an outbound trunk: without one, the SIP
+    # address is rung instead of failing the call.
+    monkeypatch.setenv("SIP_OUTBOUND_TRUNK_ID", trunk)
+    queued_call(session, phone="+919876543210", sip_address="priya@sip.linphone.org")
+    dialer = FakeDialer()
+    run(engine, monkeypatch, dialer)
+    assert dialer.calls[0][0] == dialled
