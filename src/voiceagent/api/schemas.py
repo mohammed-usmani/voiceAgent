@@ -337,3 +337,15 @@ class CampaignOut(BaseModel):
     finished_at: datetime | None
     in_flight: int = Field(description="this job's calls queued, ringing or in progress")
     candidates: dict[str, int] = Field(description="how many of the job's candidates per status")
+
+
+class EvalRunSummary(BaseModel):
+    name: str
+    started_at: datetime
+    finished_at: datetime | None
+    offline: bool = Field(description="fake models: a smoke test, not a measurement")
+    aborted: str | None = Field(description="why the run stopped early, if it did")
+    headline: dict[str, float | None] = Field(
+        description="decision accuracy, false rejection rate and criteria recall"
+    )
+    cost_usd: float

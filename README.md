@@ -273,6 +273,7 @@ uv run voiceagent dev        # the call agent; reads screening calls from DATABA
 | `GET / PATCH /messages/{id}` | read, or edit the subject/body before sending |
 | `GET /events?after=` | event feed |
 | `GET /events/stream?after=` | the same feed as server-sent events, live; resumes after `after` or the `Last-Event-ID` header; a heartbeat comment every 15 s |
+| `GET /evals/runs` · `GET /evals/runs/{name}` | evaluation runs in `evals/runs/` (newest first, offline ones flagged, headline metrics and cost), and one run's `results.json`; run the API from the repository root |
 
 Phone numbers need an outbound trunk in `SIP_OUTBOUND_TRUNK_ID`; SIP addresses don't.
 
