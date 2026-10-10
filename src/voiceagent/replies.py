@@ -26,18 +26,18 @@ def _together(model: str) -> openai.LLM:
 
 
 def main_llm() -> openai.LLM:
-    # Streamed on the real screening prompt from India, reasoning off (9 Together models,
-    # 5 runs each): MiniMax-M3 answered in 0.77 s median to the first token, 1.09 s worst,
-    # no empty replies. Qwen3.5-9B was faster (0.64 s) but ended 7 of 10 scripted calls
-    # with end_call before the questions were done; MiniMax-M3 ended none early.
-    return _together("MiniMaxAI/MiniMax-M3")
+    # Streamed on the real screening prompt from India, reasoning off: DeepSeek-V4.1-Flash
+    # answered in 0.60 s median to the first token on 10 Oct (MiniMax-M3 1.32 s, and up to
+    # 5 s on a real call; GLM-5.3 0.91 s), at MiniMax-M3's price. Qwen3.5-9B (0.64 s on
+    # 9 Oct) ended 7 of 10 scripted calls with end_call before the questions were done;
+    # DeepSeek-V4.1-Flash, MiniMax-M3 and GLM-5.3 ended none early.
+    return _together("deepseek-ai/DeepSeek-V4.1-Flash")
 
 
 def backup_llm() -> openai.LLM:
     # A different model family, so a bad reply from one isn't repeated by the other:
-    # GLM-5.3 answered in 0.67 s median and ended no scripted call early. It costs about
-    # 5x as much per token, which only matters on the rare reply the main model fumbles.
-    return _together("zai-org/GLM-5.3")
+    # MiniMax-M3 ended no scripted call early and gave no empty replies.
+    return _together("MiniMaxAI/MiniMax-M3")
 
 
 def clean_history(chat_ctx: llm.ChatContext) -> llm.ChatContext:
