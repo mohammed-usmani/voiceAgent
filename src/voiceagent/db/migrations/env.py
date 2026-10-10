@@ -9,7 +9,7 @@ from voiceagent.settings import get_settings
 
 config = context.config
 if config.config_file_name:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 if not config.get_main_option("sqlalchemy.url"):  # tests set it explicitly
     config.set_main_option("sqlalchemy.url", get_settings().database_url)
 target_metadata = Base.metadata
