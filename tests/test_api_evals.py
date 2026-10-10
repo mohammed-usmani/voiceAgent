@@ -14,6 +14,7 @@ SUMMARY = {
     "decision.accuracy": 0.85,
     "decision.false_rejection_rate": 0.05,
     "criteria.recall": 0.84,
+    "cost.per_call_usd": 0.011,
     "calls.n": 28,
 }
 
@@ -65,6 +66,7 @@ def test_runs_are_listed_newest_first_with_their_headline(client):
         "decision.accuracy": 0.85,
         "decision.false_rejection_rate": 0.05,
         "criteria.recall": 0.84,
+        "cost.per_call_usd": 0.011,  # the overview's cost-per-call tile
     }
     assert runs[1]["aborted"] is None
 

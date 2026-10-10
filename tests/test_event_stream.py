@@ -130,3 +130,8 @@ def test_a_stream_without_after_starts_at_the_newest_event(engine, session):
     assert stream_start(sm, after=None, last_event_id=None) == newest
     assert stream_start(sm, after=3, last_event_id=None) == 3
     assert stream_start(sm, after=3, last_event_id=7) == 7
+
+
+def test_the_stream_opens_at_once_even_when_quiet(client):
+    r = client.get("/events/stream", headers={"X-API-Key": "test-key"})
+    assert r.text.startswith(": open\n\n")

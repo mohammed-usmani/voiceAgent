@@ -65,6 +65,15 @@ async def event_stream(
             await sleep(POLL_S)
 
 
+async def opened(frames: AsyncIterator[str]) -> AsyncIterator[str]:
+    """`frames` after an opening comment. The response headers go out with the first chunk,
+    so without it a client of a quiet stream saw nothing, not even the connection, until
+    the first heartbeat."""
+    yield ": open\n\n"
+    async for frame in frames:
+        yield frame
+
+
 def stream_start(sm: SessionMaker, after: int | None, last_event_id: int | None) -> int:
     """The id to stream after: the later of `after` and `last_event_id`, or the newest
     event when neither is given."""
@@ -86,7 +95,7 @@ async def stream_events(
     history would flood its activity feed."""
     sm = request.app.state.sessionmaker
     return StreamingResponse(
-        event_stream(sm, stream_start(sm, after, last_event_id), request.is_disconnected),
+        opened(event_stream(sm, stream_start(sm, after, last_event_id), request.is_disconnected)),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

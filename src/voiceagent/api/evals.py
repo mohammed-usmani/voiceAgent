@@ -9,7 +9,12 @@ from fastapi.responses import FileResponse
 from voiceagent.api.schemas import EvalRunSummary
 
 router = APIRouter()
-HEADLINE = ("decision.accuracy", "decision.false_rejection_rate", "criteria.recall")
+HEADLINE = (
+    "decision.accuracy",
+    "decision.false_rejection_rate",
+    "criteria.recall",
+    "cost.per_call_usd",
+)
 
 
 def run_files(directory: Path) -> dict[str, Path]:
