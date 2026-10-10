@@ -259,6 +259,7 @@ uv run voiceagent dev        # the call agent; reads screening calls from DATABA
 | `POST /decisions/{id}:override` | `{"result", "note", "requirement_ids"?}`: the recruiter's call; re-drafts the message and calibrates future scoring on the named answers. The note is shown to the scorer for other candidates: keep names and personal details out of it |
 | `GET / PATCH /messages/{id}` | read, or edit the subject/body before sending |
 | `GET /events?after=` | event feed |
+| `GET /events/stream?after=` | the same feed as server-sent events, live; resumes after `after` or the `Last-Event-ID` header; a heartbeat comment every 15 s |
 
 Phone numbers need an outbound trunk in `SIP_OUTBOUND_TRUNK_ID`; SIP addresses don't.
 
