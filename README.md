@@ -143,6 +143,7 @@ A voice agent that gets no reply text says nothing, and the caller hears dead ai
 | STT | Deepgram Nova-3, Indian English (`en-IN`) |
 | LLM | DeepSeek-V4.1-Flash on Together AI with reasoning off (0.60 s median to first token); MiniMax-M3 answers if a reply comes back empty or fails |
 | TTS | Cartesia Sonic-3.6, voice Jacqueline, English |
+| Decisions | TypeSafe Jev: rubric scores, reviewer checks, live question progress; LLM fallback |
 
 ## Running it
 
@@ -181,6 +182,7 @@ Linphone server didn't answer over UDP.
 | [`api/`](src/voiceagent/api) | `screening-api`: jobs, criteria, candidates, calls, campaigns, decisions, messages, events |
 | [`worker/`](src/voiceagent/worker) | `screening-worker`: task queue in Postgres, dialing, post-call assessment, email, campaign tick |
 | [`agents/assessment.py`](src/voiceagent/agents/assessment.py) | After the call: evidence, rules, soft scores, reviewer → decision |
+| [`jev.py`](src/voiceagent/jev.py) | TypeSafe Jev client: scoring, reviewer checks, question progress |
 | [`agents/messages.py`](src/voiceagent/agents/messages.py) | Invite / rejection writer with a checker |
 | [`rules.py`](src/voiceagent/rules.py) | Deterministic hard-requirement rules and decision thresholds |
 | [`outcomes/email.py`](src/voiceagent/outcomes/email.py) | SMTP mailer (development: log only) |
@@ -205,8 +207,9 @@ without a screening call id (someone phoning in, `voiceagent console`) is still 
 Nimbus Labs demo.
 
 For the live view, the agent publishes into the call's room: after each of its turns,
-`screening.progress` `{"asking": requirement_id | null, "asked": [...]}` (its words matched
-to the approved questions by plain word overlap, a guide rather than a record), and for
+`screening.progress` `{"asking": requirement_id | null, "asked": [...]}` (which approved
+question the turn asks, from Jev with a 2 s limit, or by plain word overlap when Jev isn't
+configured, fails or is slow; a guide rather than a record), and for
 every turn-taking record the decision log writes, `screening.turns` with its timings and
 outcome, never words. A failed publish is logged and the call goes on.
 
@@ -236,8 +239,11 @@ SELECT candidate_id FROM calls WHERE status IN ('queued','ringing','in_progress'
 After the call an assessment agent (LangGraph) extracts each answer from the transcript and
 checks that its quote is the candidate's own words, applies the hard requirements' rules in
 code, scores the rest against their rubrics (calibrated by past recruiter overrides), and
-has a second, stronger model challenge every rejection, every verdict resting on a weak
-answer and every invite that would go out unattended. A soft requirement with no verified
+checks every reason behind every rejection, every verdict resting on a weak answer and
+every invite that would go out unattended. With `TYPESAFE_API_KEY` set, Jev scores the
+answers and checks each reason (does the transcript support it, does the résumé agree); if
+Jev fails, the LLM scorer and a second, stronger LLM reviewer take over for that call, as
+they do without the key. A soft requirement with no verified
 answer sends the candidate to a recruiter instead of counting for or against them. A message
 agent drafts the invite or a reason-free rejection; code checks it for leaked reasons,
 promises, the name and next steps, and a model for tone and invented facts. Invites to
@@ -286,7 +292,10 @@ Email goes out through `SMTP_HOST` (see `.env.example`); without it, messages ar
 recorded in the database and the log.
 
 The backend's agents run on DeepSeek-V4-Flash (backup MiniMax-M3) via Together AI's
-JSON-schema mode, and the assessment's reviewer on DeepSeek-V4-Pro; embeddings come from `BAAI/bge-base-en-v1.5`, run locally.
+JSON-schema mode, and the assessment's LLM reviewer on DeepSeek-V4-Pro; embeddings come from `BAAI/bge-base-en-v1.5`, run locally.
+Soft-answer scoring, reviewer checks and live question progress use TypeSafe's Jev
+(`jev-latest`) when `TYPESAFE_API_KEY` is set, with those LLMs and the word-overlap matcher
+as automatic fallback.
 
 ## Evaluation
 
@@ -348,6 +357,10 @@ with an instruction hidden in the answer matters more than a small accuracy edge
 evidence favours Jev in all three places, with question tracking the only formal win. The
 data is synthetic, labels come from a model (checked by hand on 90 items), and Jev is an
 early-access model.
+
+Production now uses Jev for all three decisions, with the requests the benchmark measured
+(the benchmark builds them with production's code) and the previous LLM scorer, LLM
+reviewer and word-overlap matcher as automatic fallback when Jev fails or isn't configured.
 
 ```bash
 uv run decision-bench --task all --budget-usd 5     # or --task scoring|progress|review
