@@ -1,2 +1,167 @@
 {"key": "20261009T192610Z:1", "turns": {"A1": []}}
 {"key": "20261009T192610Z:0", "turns": {"A1": [], "A2": ["graduate", "intl_voice_years"], "A3": ["night_shifts"], "A4": ["joining_days"]}}
+{"key": "20261009T192610Z:8", "turns": {"A1": []}}
+{"key": "20261009T192610Z:7", "turns": {"A1": []}}
+{"key": "20261009T192610Z:9", "turns": {"A1": [], "A2": [], "A3": ["sales_years", "target_record"]}}
+{"key": "20261009T192610Z:2", "turns": {"A1": [], "A2": ["graduate"]}}
+{"key": "20261009T192610Z:4", "turns": {"A1": []}}
+{"key": "20261009T192610Z:5", "turns": {"A1": []}}
+{"key": "20261009T192610Z:6", "turns": {"A1": [], "A2": ["sql_years"], "A3": ["bi_tool"], "A4": ["hybrid_gurugram"], "A5": ["pandas"], "A6": ["ab_testing"], "A7": ["expected_ctc"]}}
+{"key": "20261009T192610Z:3", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": []}}
+{"key": "20261009T192610Z:12", "turns": {"A1": []}}
+{"key": "20261009T192610Z:14", "turns": {"A1": []}}
+{"key": "20261009T192610Z:18", "turns": {"A1": []}}
+{"key": "20261009T192610Z:15", "turns": {"A1": [], "A2": []}}
+{"key": "20261009T192610Z:13", "turns": {"A1": [], "A2": ["python_years"]}}
+{"key": "20261009T192610Z:19", "turns": {"A1": []}}
+{"key": "20261009T192610Z:16", "turns": {"A1": [], "A2": ["qualification", "tn_registration"], "A3": ["icu_years"], "A4": ["rotating_shifts"], "A5": ["ventilator_care"]}}
+{"key": "20261009T192610Z:22", "turns": {"A1": [], "A2": ["supervision_years"]}}
+{"key": "20261009T192610Z:21", "turns": {"A1": [], "A2": ["supervision_years"], "A3": ["rotating_shifts"], "A4": ["wms_experience"], "A5": ["team_size"], "A6": ["forklift_cert"], "A7": ["expected_salary"]}}
+{"key": "20261009T192610Z:23", "turns": {"A1": [], "A2": ["supervision_years"]}}
+{"key": "20261009T192610Z:17", "turns": {"A1": [], "A2": ["qualification", "icu_years"], "A3": ["tn_registration"], "A4": ["icu_years"], "A5": ["rotating_shifts"], "A6": ["ventilator_care"], "A7": ["bls"]}}
+{"key": "20261009T192610Z:24", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": []}}
+{"key": "20261009T192610Z:26", "turns": {"A1": [], "A2": ["graduate"]}}
+{"key": "20261009T195557Z:0", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": []}}
+{"key": "20261009T192610Z:27", "turns": {"A1": [], "A2": ["graduate"], "A3": ["intl_voice_years", "night_shifts"], "A4": ["joining_days"], "A5": [], "A6": []}}
+{"key": "20261009T195557Z:2", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T195557Z:3", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": []}}
+{"key": "20261009T195557Z:1", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": []}}
+{"key": "20261009T195557Z:5", "turns": {"A1": [], "A2": ["sql_years"], "A3": ["bi_tool"], "A4": ["hybrid_gurugram"], "A5": ["pandas"], "A6": ["ab_testing"], "A7": ["expected_ctc"], "A8": []}}
+{"key": "20261009T195557Z:4", "turns": {"A1": [], "A2": ["sql_years"], "A3": ["bi_tool"], "A4": ["hybrid_gurugram"], "A5": ["pandas"], "A6": ["ab_testing"], "A7": ["expected_ctc"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T195557Z:6", "turns": {"A1": [], "A2": ["sql_years"], "A3": ["bi_tool"], "A4": ["hybrid_gurugram"], "A5": ["pandas"], "A6": ["ab_testing"], "A7": []}}
+{"key": "20261009T195557Z:7", "turns": {"A1": [], "A2": ["sql_years"], "A3": ["bi_tool"], "A4": ["hybrid_gurugram"], "A5": ["pandas"], "A6": ["ab_testing"], "A7": ["expected_ctc"], "A8": [], "A9": []}}
+{"key": "20261009T195557Z:8", "turns": {"A1": [], "A2": ["sales_years"], "A3": ["hindi_english"], "A4": ["baner_schedule"], "A5": ["target_record"], "A6": ["marathi"], "A7": ["expected_salary"], "A8": []}}
+{"key": "20261009T195557Z:9", "turns": {"A1": [], "A2": ["sales_years"], "A3": ["hindi_english"], "A4": ["baner_schedule"], "A5": ["target_record"], "A6": ["marathi"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T195557Z:13", "turns": {"A1": [], "A2": ["python_years"], "A3": ["hybrid_bengaluru"], "A4": ["notice_days"], "A5": ["sql_depth"], "A6": ["api_design"], "A7": ["expected_ctc"], "A8": []}}
+{"key": "20261009T195557Z:12", "turns": {"A1": [], "A2": ["python_years"], "A3": ["hybrid_bengaluru"], "A4": ["notice_days"], "A5": ["sql_depth"], "A6": ["api_design"], "A7": ["expected_ctc"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T195557Z:11", "turns": {"A1": [], "A2": ["sales_years"], "A3": ["target_record"], "A4": ["hindi_english"], "A5": ["marathi"], "A6": ["baner_schedule"], "A7": ["expected_salary"]}}
+{"key": "20261009T195557Z:10", "turns": {"A1": [], "A2": ["sales_years"], "A3": ["hindi_english"], "A4": ["baner_schedule"], "A5": ["target_record"], "A6": ["marathi"], "A7": ["expected_salary"], "A8": [], "A9": []}}
+{"key": "20261009T195557Z:15", "turns": {"A1": [], "A2": []}}
+{"key": "20261009T195557Z:14", "turns": {"A1": [], "A2": ["python_years"], "A3": ["hybrid_bengaluru"], "A4": ["notice_days"], "A5": ["sql_depth"], "A6": ["api_design"], "A7": ["expected_ctc"], "A8": []}}
+{"key": "20261009T195557Z:16", "turns": {"A1": [], "A2": ["qualification"], "A3": ["icu_years"], "A4": ["rotating_shifts"], "A5": ["ventilator_care"], "A6": ["bls"], "A7": ["expected_salary"], "A8": []}}
+{"key": "20261009T195557Z:17", "turns": {"A1": [], "A2": ["qualification"], "A3": ["icu_years"], "A4": ["ventilator_care"], "A5": ["bls"], "A6": ["expected_salary"], "A7": []}}
+{"key": "20261009T195557Z:20", "turns": {"A1": [], "A2": ["supervision_years"], "A3": ["rotating_shifts"], "A4": ["wms_experience"], "A5": ["team_size"], "A6": ["forklift_cert"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T192610Z:11", "turns": {"A1": [], "A2": [], "A3": ["sales_years"], "A4": ["hindi_english"], "A5": ["baner_schedule", "marathi"], "A6": ["expected_salary"], "A7": []}}
+{"key": "20261009T195557Z:22", "turns": {"A1": [], "A2": ["supervision_years"], "A3": ["rotating_shifts"], "A4": ["wms_experience"], "A5": ["team_size"], "A6": ["forklift_cert"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T195557Z:23", "turns": {"A1": [], "A2": ["supervision_years"], "A3": ["rotating_shifts"], "A4": ["wms_experience"], "A5": ["team_size"], "A6": ["forklift_cert"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T195557Z:19", "turns": {"A1": [], "A2": []}}
+{"key": "20261009T195557Z:18", "turns": {"A1": [], "A2": ["qualification"], "A3": ["tn_registration"], "A4": ["icu_years"], "A5": ["rotating_shifts"], "A6": ["ventilator_care"], "A7": ["bls"], "A8": ["expected_salary"], "A9": []}}
+{"key": "20261009T195557Z:24", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": []}}
+{"key": "20261009T195557Z:25", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T195557Z:26", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T195557Z:27", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": []}}
+{"key": "20261009T203518Z:1", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T203518Z:3", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["frustrated_customer"], "A5": ["intl_voice_years"], "A6": ["expected_salary"], "A7": [], "A8": [], "A9": []}}
+{"key": "20261009T203518Z:0", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T203518Z:4", "turns": {"A1": [], "A2": ["sql_years"], "A3": ["bi_tool"], "A4": ["hybrid_gurugram"], "A5": ["pandas"], "A6": ["ab_testing"], "A7": ["expected_ctc"], "A8": []}}
+{"key": "20261009T203518Z:5", "turns": {"A1": [], "A2": ["sql_years"], "A3": ["bi_tool"], "A4": ["hybrid_gurugram"], "A5": ["pandas"], "A6": ["ab_testing"], "A7": ["expected_ctc"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T192610Z:20", "turns": {"A1": [], "A2": ["supervision_years"], "A3": ["rotating_shifts"], "A4": ["wms_experience"], "A5": ["forklift_cert"], "A6": ["expected_salary"]}}
+{"key": "20261009T203518Z:7", "turns": {"A1": [], "A2": ["sql_years"], "A3": ["bi_tool"], "A4": ["hybrid_gurugram"], "A5": ["pandas"], "A6": ["ab_testing"], "A7": ["expected_ctc"], "A8": []}}
+{"key": "20261009T203518Z:6", "turns": {"A1": [], "A2": ["sql_years"], "A3": ["bi_tool"], "A4": ["hybrid_gurugram"], "A5": ["pandas"], "A6": ["ab_testing"], "A7": ["expected_ctc"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T203518Z:2", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T195557Z:21", "turns": {"A1": [], "A2": ["supervision_years"], "A3": ["rotating_shifts"], "A4": ["wms_experience"], "A5": ["team_size"], "A6": ["forklift_cert"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T203518Z:8", "turns": {"A1": [], "A2": ["sales_years"], "A3": ["hindi_english"], "A4": ["baner_schedule"], "A5": ["target_record"], "A6": ["marathi"], "A7": ["expected_salary"], "A8": []}}
+{"key": "20261009T203518Z:9", "turns": {"A1": [], "A2": ["sales_years"], "A3": ["hindi_english"], "A4": ["baner_schedule"], "A5": ["target_record"], "A6": ["marathi"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T203518Z:10", "turns": {"A1": [], "A2": ["sales_years"], "A3": ["hindi_english"], "A4": ["baner_schedule"], "A5": ["target_record"], "A6": ["marathi"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T203518Z:12", "turns": {"A1": [], "A2": ["python_years"], "A3": ["hybrid_bengaluru"], "A4": ["notice_days"], "A5": ["sql_depth"], "A6": ["api_design"], "A7": ["expected_ctc"], "A8": []}}
+{"key": "20261009T203518Z:15", "turns": {"A1": [], "A2": []}}
+{"key": "20261009T203518Z:14", "turns": {"A1": [], "A2": ["python_years"], "A3": ["hybrid_bengaluru"], "A4": ["notice_days"], "A5": ["sql_depth"], "A6": ["api_design"], "A7": ["expected_ctc"], "A8": []}}
+{"key": "20261009T203518Z:13", "turns": {"A1": [], "A2": ["python_years"], "A3": ["hybrid_bengaluru"], "A4": ["notice_days"], "A5": ["sql_depth"], "A6": ["api_design"], "A7": ["expected_ctc"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T203518Z:19", "turns": {"A1": [], "A2": []}}
+{"key": "20261009T203518Z:17", "turns": {"A1": [], "A2": ["qualification"], "A3": ["icu_years"], "A4": ["rotating_shifts"], "A5": ["ventilator_care"], "A6": ["bls"], "A7": ["expected_salary"], "A8": [], "A9": []}}
+{"key": "20261009T203518Z:16", "turns": {"A1": [], "A2": ["qualification"], "A3": ["icu_years"], "A4": ["rotating_shifts"], "A5": ["ventilator_care"], "A6": ["bls"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T203518Z:11", "turns": {"A1": [], "A2": ["sales_years"], "A3": ["hindi_english"], "A4": ["baner_schedule"], "A5": ["target_record"], "A6": ["marathi"], "A7": ["expected_salary"], "A8": []}}
+{"key": "20261009T203518Z:18", "turns": {"A1": [], "A2": ["qualification"], "A3": ["tn_registration"], "A4": ["icu_years"], "A5": ["rotating_shifts"], "A6": ["ventilator_care"], "A7": ["bls"], "A8": ["expected_salary"], "A9": [], "A10": [], "A11": []}}
+{"key": "20261009T203518Z:20", "turns": {"A1": [], "A2": ["supervision_years"], "A3": ["rotating_shifts"], "A4": ["wms_experience"], "A5": ["team_size"], "A6": ["forklift_cert"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T203518Z:21", "turns": {"A1": [], "A2": ["supervision_years"], "A3": ["rotating_shifts"], "A4": ["wms_experience"], "A5": ["team_size"], "A6": ["forklift_cert"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T203518Z:22", "turns": {"A1": [], "A2": ["supervision_years"], "A3": ["wms_experience"], "A4": ["rotating_shifts"], "A5": ["team_size"], "A6": ["forklift_cert"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T203518Z:23", "turns": {"A1": [], "A2": ["supervision_years"], "A3": ["rotating_shifts"], "A4": ["wms_experience"], "A5": ["team_size"], "A6": ["forklift_cert"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T203518Z:24", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": []}}
+{"key": "20261009T203518Z:25", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": []}}
+{"key": "20261009T203518Z:27", "turns": {"A1": [], "A2": ["graduate"]}}
+{"key": "20261009T203518Z:26", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T211706Z:0", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": []}}
+{"key": "20261009T211706Z:2", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": []}}
+{"key": "20261009T211706Z:1", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": []}}
+{"key": "20261009T211706Z:3", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T211706Z:5", "turns": {"A1": [], "A2": ["sql_years"], "A3": ["bi_tool"], "A4": ["hybrid_gurugram"], "A5": ["pandas"], "A6": ["ab_testing"], "A7": ["expected_ctc"], "A8": []}}
+{"key": "20261009T211706Z:4", "turns": {"A1": [], "A2": ["sql_years"], "A3": ["bi_tool"], "A4": ["hybrid_gurugram"], "A5": ["pandas"], "A6": ["ab_testing"], "A7": ["expected_ctc"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T211706Z:6", "turns": {"A1": [], "A2": ["sql_years"], "A3": ["bi_tool"], "A4": ["hybrid_gurugram"], "A5": ["pandas"], "A6": ["ab_testing"], "A7": ["expected_ctc"], "A8": []}}
+{"key": "20261009T211706Z:7", "turns": {"A1": [], "A2": ["sql_years"], "A3": ["hybrid_gurugram"], "A4": ["pandas"], "A5": ["ab_testing"], "A6": ["expected_ctc"], "A7": [], "A8": [], "A9": []}}
+{"key": "20261009T211706Z:8", "turns": {"A1": [], "A2": ["baner_schedule"], "A3": ["marathi"], "A4": ["target_record"], "A5": ["expected_salary"], "A6": []}}
+{"key": "20261009T211706Z:10", "turns": {"A1": [], "A2": ["sales_years"], "A3": ["hindi_english"], "A4": ["baner_schedule"], "A5": ["target_record"], "A6": ["marathi"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T211706Z:11", "turns": {"A1": [], "A2": ["sales_years"], "A3": ["hindi_english"], "A4": ["baner_schedule"], "A5": ["expected_salary"], "A6": [], "A7": [], "A8": []}}
+{"key": "20261009T211706Z:9", "turns": {"A1": [], "A2": ["sales_years"], "A3": ["hindi_english"], "A4": ["baner_schedule"], "A5": ["target_record"], "A6": ["marathi"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T211706Z:14", "turns": {"A1": [], "A2": ["python_years"], "A3": ["hybrid_bengaluru"], "A4": ["notice_days"], "A5": ["sql_depth"], "A6": ["api_design"], "A7": ["expected_ctc"], "A8": []}}
+{"key": "20261009T211706Z:15", "turns": {"A1": [], "A2": []}}
+{"key": "20261009T211706Z:12", "turns": {"A1": [], "A2": ["python_years"], "A3": ["hybrid_bengaluru"], "A4": ["notice_days"], "A5": ["sql_depth"], "A6": ["api_design"], "A7": ["expected_ctc"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T211706Z:13", "turns": {"A1": [], "A2": ["python_years"], "A3": ["hybrid_bengaluru"], "A4": ["notice_days"], "A5": ["sql_depth"], "A6": ["api_design"], "A7": ["expected_ctc"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T211706Z:19", "turns": {"A1": [], "A2": []}}
+{"key": "20261009T211706Z:16", "turns": {"A1": [], "A2": ["qualification"], "A3": ["icu_years"], "A4": ["rotating_shifts"], "A5": ["ventilator_care"], "A6": ["bls"], "A7": ["expected_salary"], "A8": []}}
+{"key": "20261009T211706Z:18", "turns": {"A1": [], "A2": ["qualification"], "A3": ["icu_years"], "A4": ["rotating_shifts"], "A5": ["ventilator_care"], "A6": ["bls"], "A7": ["expected_salary"], "A8": []}}
+{"key": "20261009T211706Z:17", "turns": {"A1": [], "A2": ["qualification"], "A3": ["icu_years"], "A4": ["ventilator_care"], "A5": ["bls"], "A6": ["expected_salary"], "A7": []}}
+{"key": "20261009T192610Z:25", "turns": {"A1": [], "A2": ["graduate"], "A3": [], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": []}}
+{"key": "20261009T211706Z:25", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": []}}
+{"key": "20261009T211706Z:26", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": []}}
+{"key": "20261009T211706Z:27", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": []}}
+{"key": "20261009T211706Z:24", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T192610Z:10", "turns": {"A1": [], "A2": ["sales_years"], "A3": ["hindi_english"], "A4": ["hindi_english", "marathi", "baner_schedule"], "A5": ["target_record"], "A6": ["marathi", "expected_salary"], "A7": ["expected_salary"]}}
+{"key": "20261009T211706Z:21", "turns": {"A1": [], "A2": ["supervision_years"], "A3": ["rotating_shifts"], "A4": ["wms_experience"], "A5": ["team_size"], "A6": ["forklift_cert"], "A7": ["expected_salary"], "A8": []}}
+{"key": "20261009T215614Z:0", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T211706Z:22", "turns": {"A1": [], "A2": ["supervision_years"], "A3": ["rotating_shifts"], "A4": ["wms_experience"], "A5": ["team_size"], "A6": ["forklift_cert"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T211706Z:20", "turns": {"A1": [], "A2": ["supervision_years"], "A3": ["rotating_shifts"], "A4": ["wms_experience"], "A5": ["team_size"], "A6": ["forklift_cert"], "A7": ["expected_salary"], "A8": []}}
+{"key": "20261009T211706Z:23", "turns": {"A1": [], "A2": ["supervision_years"], "A3": ["rotating_shifts"], "A4": ["wms_experience"], "A5": ["team_size"], "A6": ["forklift_cert"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T215614Z:1", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": []}}
+{"key": "20261009T215614Z:2", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": []}}
+{"key": "20261009T215614Z:3", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["frustrated_customer"], "A5": ["intl_voice_years"], "A6": ["expected_salary"], "A7": []}}
+{"key": "20261009T215614Z:4", "turns": {"A1": [], "A2": ["sql_years"], "A3": ["bi_tool"], "A4": ["hybrid_gurugram"], "A5": ["pandas"], "A6": ["ab_testing"], "A7": ["expected_ctc"], "A8": []}}
+{"key": "20261009T215614Z:5", "turns": {"A1": [], "A2": ["sql_years"], "A3": ["bi_tool"], "A4": ["hybrid_gurugram"], "A5": ["pandas"], "A6": ["ab_testing"], "A7": ["expected_ctc"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T215614Z:8", "turns": {"A1": [], "A2": ["sales_years"], "A3": ["hindi_english"], "A4": ["baner_schedule"], "A5": ["target_record"], "A6": ["expected_salary"], "A7": [], "A8": [], "A9": []}}
+{"key": "20261009T215614Z:7", "turns": {"A1": [], "A2": ["sql_years"], "A3": ["bi_tool"], "A4": ["hybrid_gurugram"], "A5": ["pandas"], "A6": ["ab_testing"], "A7": ["expected_ctc"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T215614Z:10", "turns": {"A1": [], "A2": ["sales_years"], "A3": ["hindi_english"], "A4": ["baner_schedule"], "A5": ["target_record"], "A6": ["marathi"], "A7": ["expected_salary"], "A8": []}}
+{"key": "20261009T215614Z:6", "turns": {"A1": [], "A2": ["sql_years"], "A3": ["bi_tool"], "A4": ["hybrid_gurugram"], "A5": ["pandas"], "A6": ["ab_testing"], "A7": ["expected_ctc"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T215614Z:9", "turns": {"A1": [], "A2": ["sales_years"], "A3": ["hindi_english"], "A4": ["baner_schedule"], "A5": ["target_record"], "A6": ["marathi"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T215614Z:15", "turns": {"A1": [], "A2": []}}
+{"key": "20261009T215614Z:13", "turns": {"A1": [], "A2": ["python_years"], "A3": ["hybrid_bengaluru"], "A4": ["notice_days"], "A5": ["sql_depth"], "A6": ["api_design"], "A7": ["expected_ctc"], "A8": []}}
+{"key": "20261009T215614Z:14", "turns": {"A1": [], "A2": ["python_years"], "A3": ["hybrid_bengaluru"], "A4": ["notice_days"], "A5": ["sql_depth"], "A6": ["api_design"], "A7": ["expected_ctc"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T215614Z:12", "turns": {"A1": [], "A2": ["python_years"], "A3": ["hybrid_bengaluru"], "A4": ["notice_days"], "A5": ["sql_depth"], "A6": ["api_design"], "A7": ["expected_ctc"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T215614Z:19", "turns": {"A1": [], "A2": []}}
+{"key": "20261009T215614Z:18", "turns": {"A1": [], "A2": ["qualification"], "A3": ["icu_years"], "A4": ["rotating_shifts"], "A5": ["ventilator_care"], "A6": ["bls"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T215614Z:16", "turns": {"A1": [], "A2": ["qualification"], "A3": ["icu_years"], "A4": ["rotating_shifts"], "A5": ["ventilator_care"], "A6": ["bls"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T215614Z:17", "turns": {"A1": [], "A2": ["qualification"], "A3": ["icu_years"], "A4": ["rotating_shifts"], "A5": ["ventilator_care"], "A6": ["bls"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T215614Z:20", "turns": {"A1": [], "A2": ["supervision_years"], "A3": ["rotating_shifts"], "A4": ["wms_experience"], "A5": ["team_size"], "A6": ["forklift_cert"], "A7": ["expected_salary"], "A8": []}}
+{"key": "20261009T215614Z:23", "turns": {"A1": [], "A2": ["supervision_years"], "A3": ["rotating_shifts"], "A4": ["wms_experience"], "A5": ["team_size"], "A6": ["forklift_cert"], "A7": ["expected_salary"], "A8": []}}
+{"key": "20261009T215614Z:24", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": []}}
+{"key": "20261009T215614Z:26", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": []}}
+{"key": "20261009T215614Z:25", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T215614Z:27", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": []}}
+{"key": "20261009T223414Z:2", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": []}}
+{"key": "20261009T223414Z:0", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": []}}
+{"key": "20261009T223414Z:3", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": []}}
+{"key": "20261009T215614Z:11", "turns": {"A1": [], "A2": ["sales_years"], "A3": [], "A4": ["hindi_english"], "A5": ["baner_schedule"], "A6": ["target_record"], "A7": ["marathi"], "A8": ["expected_salary"]}}
+{"key": "20261009T223414Z:1", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T223414Z:4", "turns": {"A1": [], "A2": ["sql_years"], "A3": ["bi_tool"], "A4": ["pandas"], "A5": ["hybrid_gurugram"], "A6": ["ab_testing"], "A7": ["expected_ctc"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T215614Z:22", "turns": {"A1": [], "A2": ["supervision_years"], "A3": ["rotating_shifts"], "A4": ["wms_experience"], "A5": ["team_size"], "A6": ["forklift_cert"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T223414Z:5", "turns": {"A1": [], "A2": ["sql_years"], "A3": ["bi_tool"], "A4": ["hybrid_gurugram"], "A5": ["pandas"], "A6": ["ab_testing"], "A7": ["expected_ctc"], "A8": []}}
+{"key": "20261009T223414Z:7", "turns": {"A1": [], "A2": ["sql_years"], "A3": ["bi_tool"], "A4": ["hybrid_gurugram"], "A5": ["pandas"], "A6": ["ab_testing"], "A7": ["expected_ctc"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T223414Z:6", "turns": {"A1": [], "A2": ["sql_years"], "A3": ["bi_tool"], "A4": ["hybrid_gurugram"], "A5": ["pandas"], "A6": ["ab_testing"], "A7": ["expected_ctc"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T223414Z:8", "turns": {"A1": [], "A2": ["sales_years"], "A3": ["hindi_english"], "A4": ["baner_schedule"], "A5": ["target_record"], "A6": ["marathi"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T223414Z:9", "turns": {"A1": [], "A2": ["sales_years"], "A3": ["hindi_english"], "A4": ["baner_schedule"], "A5": ["target_record"], "A6": ["marathi"], "A7": ["expected_salary"], "A8": [], "A9": []}}
+{"key": "20261009T223414Z:10", "turns": {"A1": [], "A2": ["sales_years"], "A3": ["hindi_english"], "A4": ["baner_schedule"], "A5": ["target_record"], "A6": ["marathi"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T223414Z:15", "turns": {"A1": [], "A2": []}}
+{"key": "20261009T223414Z:11", "turns": {"A1": [], "A2": ["sales_years"], "A3": ["hindi_english"], "A4": ["baner_schedule"], "A5": ["target_record"], "A6": ["marathi"], "A7": ["expected_salary"]}}
+{"key": "20261009T223414Z:12", "turns": {"A1": [], "A2": ["python_years"], "A3": ["hybrid_bengaluru"], "A4": ["notice_days"], "A5": ["sql_depth"], "A6": ["api_design"], "A7": ["expected_ctc"], "A8": []}}
+{"key": "20261009T223414Z:13", "turns": {"A1": [], "A2": ["python_years"], "A3": ["hybrid_bengaluru"], "A4": ["notice_days"], "A5": ["sql_depth"], "A6": ["api_design"], "A7": ["expected_ctc"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T223414Z:14", "turns": {"A1": [], "A2": ["python_years"], "A3": ["hybrid_bengaluru"], "A4": ["notice_days"], "A5": ["sql_depth"], "A6": ["api_design"], "A7": ["expected_ctc"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T223414Z:19", "turns": {"A1": [], "A2": []}}
+{"key": "20261009T215614Z:21", "turns": {"A1": [], "A2": ["supervision_years"], "A3": ["supervision_years"], "A4": ["rotating_shifts"], "A5": ["wms_experience"], "A6": ["team_size"], "A7": ["forklift_cert"], "A8": ["expected_salary"], "A9": [], "A10": [], "A11": []}}
+{"key": "20261009T223414Z:16", "turns": {"A1": [], "A2": ["qualification"], "A3": ["icu_years"], "A4": ["rotating_shifts"], "A5": ["ventilator_care"], "A6": ["bls"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T223414Z:17", "turns": {"A1": [], "A2": ["qualification"], "A3": ["icu_years"], "A4": ["rotating_shifts"], "A5": ["ventilator_care"], "A6": ["bls"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T223414Z:18", "turns": {"A1": [], "A2": ["qualification"], "A3": ["icu_years"], "A4": ["rotating_shifts"], "A5": ["ventilator_care"], "A6": ["bls"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T223414Z:22", "turns": {"A1": [], "A2": ["supervision_years"], "A3": ["rotating_shifts"], "A4": ["wms_experience"], "A5": ["team_size"], "A6": ["forklift_cert"], "A7": ["expected_salary"], "A8": []}}
+{"key": "20261009T223414Z:23", "turns": {"A1": [], "A2": ["supervision_years"], "A3": ["rotating_shifts"], "A4": ["wms_experience"], "A5": ["team_size"], "A6": ["forklift_cert"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T223414Z:24", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T223414Z:25", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": []}}
+{"key": "20261009T223414Z:20", "turns": {"A1": [], "A2": ["supervision_years"], "A3": ["rotating_shifts"], "A4": ["wms_experience"], "A5": ["team_size"], "A6": ["forklift_cert"], "A7": ["expected_salary"], "A8": [], "A9": [], "A10": []}}
+{"key": "20261009T223414Z:26", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": []}}
+{"key": "20261009T223414Z:27", "turns": {"A1": [], "A2": ["graduate"], "A3": ["night_shifts"], "A4": ["joining_days"], "A5": ["frustrated_customer"], "A6": ["intl_voice_years"], "A7": ["expected_salary"], "A8": [], "A9": []}}

@@ -199,6 +199,111 @@ main run. No metric or decision rule changed.
 3. *10 Oct 2026.* Expected spend from the smoke run's tokens: about $4.4 of the $5 budget,
    so the tasks run in order (1, 2, 3) and the pre-declared reductions apply if needed.
 
+Made after the main run (results below show them as separate rows, never in place of the
+registered numbers):
+
+4. *10–11 Oct 2026.* The budget guard was raised to $6.50: the ledger counts estimated
+   spend, which ran about 12% above the Together bill, and Together briefly rejected calls
+   with "credit limit exceeded" twice. Rows that failed that way were deleted and re-run;
+   no other failure occurred, so no contender row was dropped.
+5. *11 Oct 2026.* The two spot-check files were read by a person. Task 2: 49 of 50 labels
+   agreed. The disagreement is a turn where the voice model of the first run printed a
+   made-up tool call instead of speaking; the labeller read a question into it. All 5 such
+   turns in the dataset were checked; 2 had a requirement label, and the corrected row below
+   scores them as "none". Task 1: 34 of 40 labels agreed; all 6 disagreements are answers to
+   "tell me about a time you calmed down an upset customer" that describe a habit rather than
+   an instance, which the labeller called fully meets and the person partly meets. Task 1 is
+   also scored against the person's 40 labels below.
+
+## Results
+
+Run `main`, 10–11 Oct 2026, Jev 1.13. The run's ledger estimates $4.2 of Together spend at
+list prices (it ran about 12% above the bill); Jev cost a few cents.
+
+### Task 1: rubric scoring — no clear winner under the registered rule
+
+671 base items (505 generated, 166 real) plus 419 stress variants, every item scored 5 times
+by each contender. No scoring failed.
+
+| | Production LLM | Jev |
+|---|---|---|
+| MAE vs labels (95% CI) | **0.041** [0.031, 0.050] | 0.048 [0.040, 0.056] |
+| MAE, generated / real answers | 0.025 / 0.089 | 0.046 / 0.054 |
+| Band accuracy (95% CI) | 0.919 [0.899, 0.939] | 0.929 [0.909, 0.947] |
+| Repeat spread, mean per-item std (95% CI) | 0.0105 [0.007, 0.014] | **0.0022** [0.002, 0.003] |
+| Same band in all 5 repeats | 95.1% | **99.1%** |
+| Name-swap spread, mean (95% CI) | 0.0225 [0.003, 0.052] | **0.0032** [0.002, 0.005] |
+| Name-swap spread, largest | 0.40 | **0.021** |
+| Paraphrase spread, mean | 0.030 | 0.023 |
+| Injected weak answers scored above 0.66 (95% CI) | 12% [4%, 21%] | **0%** [0%, 0%] |
+| Latency p50 / p95 | 2.38 / 5.28 s | **0.30 / 0.42 s** |
+| USD per 1,000 scorings | 0.102 | **0.029** |
+| MAE against the person's 40 labels (amendment 5) | 0.163 | **0.122** |
+
+Jev − LLM, paired: MAE +0.007 [−0.001, +0.017]; repeat spread −0.008 [−0.012, −0.005];
+name-swap spread −0.019 [−0.049, +0.001]; MAE against the person's labels −0.040
+[−0.082, −0.004] (n = 40).
+
+The rule needed Jev's name-swap spread to be clearly lower; its interval touches zero, so the
+verdict is **no clear winner**. What the numbers do show: the LLM is slightly more accurate on
+generated answers; Jev is steadier on repeats and name swaps, was never moved by an
+injection, is about 8× faster and 3.5× cheaper, and is closer to the person's own labels on
+real answers.
+
+End to end (the stored evidence of the eval calls replayed with each scorer, reviewer
+skipped): the two scorers gave different overall scores on most calls but the same decision
+on every call, so decision accuracy (0.55) and false rejections (0) are identical. Hard
+requirements decide most of these outcomes.
+
+### Task 2: question progress — Jev
+
+1,285 agent turns from the six eval runs.
+
+| | Word overlap (current) | Jev | DeepSeek-V4.1-Flash |
+|---|---|---|---|
+| Accuracy (95% CI) | 0.911 [0.894, 0.925] | **0.991** [0.986, 0.996] | **0.991** [0.986, 0.996] |
+| Accuracy, 2 labels corrected (amendment 5) | 0.910 | **0.991** | 0.990 |
+| Macro-F1 | 0.898 | 0.993 | 0.993 |
+| False ticks on turns that ask nothing | 9.4% | 1.5% | 1.3% |
+| Latency p50 / p95 | 0 / 0 s | 0.28 / **0.39 s** | 0.42 / 0.74 s |
+| USD per 1,000 turns | 0 | **0.024** | 0.090 |
+
+The rule picks the most accurate option with p95 under 1 s. Jev and the LLM tie on
+accuracy; Jev is faster and cheaper, so the verdict is **Jev**.
+
+### Task 3: reviewer checks — no clear winner under the registered rule
+
+130 call instances (50 original, 80 with one reason corrupted), 234 reasons: 142 correct, 92
+that should be flagged.
+
+| | Production reviewer | Jev |
+|---|---|---|
+| Catch rate (95% CI) | 0.565 [0.467, 0.663] | **0.804** [0.717, 0.880] |
+| False-flag rate (95% CI) | **0.028** [0.007, 0.056] | 0.035 [0.007, 0.070] |
+| Unsupported quote caught | 5/20 | **18/20** |
+| Unit mix-up caught | 10/20 | **14/20** |
+| Résumé contradiction caught | 16/20 | **20/20** |
+| Wrong value caught | 19/20 | **20/20** |
+| Real wrong reasons caught | 0/6 | 0/6 |
+| Latency p50 / p95 | 3.85 / 6.09 s per call | 0.29 / 0.43 s per reason |
+| USD per 1,000 checks | 0.82 | **0.045** |
+
+Jev − reviewer, paired: catch rate +0.239 [+0.152, +0.348]; false-flag rate +0.007
+[−0.014, +0.028]. The rule needed Jev's false-flag rate to be no higher; it is 0.7 points
+higher, inside the noise, so the verdict is **no clear winner**. Neither caught the 6 real
+wrong reasons: each is a simulated candidate contradicting their own ground truth, which
+neither the transcript nor the résumé shows.
+
+### Caveats
+
+- Synthetic data: answers were written by DeepSeek-V4-Flash, the same model as the Task 1
+  LLM contender, and the candidates are simulated.
+- Labels come from GLM-5.3, checked by one person on 90 items (above); the labeller is
+  lenient on "describe a time" questions.
+- One domain (screening calls for Indian hiring) and one early-access Jev version, accessed
+  through TypeSafe's early-access programme.
+- Task 3's catch rate rests mostly on deliberately corrupted reasons (80 of 92).
+
 ## Reproduce
 
 ```sh
