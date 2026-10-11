@@ -81,6 +81,15 @@ def test_events_paginate_after_an_id(client):
     assert len(first) == 1 and len(rest) == 1 and rest[0]["id"] > first[0]["id"]
 
 
+def test_last_returns_the_newest_events_oldest_first(client):
+    # The activity feed opens with recent history; `last` gives the newest N.
+    for _ in range(3):
+        client.post("/jobs", json=JOB, headers=KEY)
+    every = client.get("/events", params={"limit": 500}, headers=KEY).json()
+    last = client.get("/events", params={"last": 2}, headers=KEY).json()
+    assert [e["id"] for e in last] == [e["id"] for e in every[-2:]]
+
+
 def test_app_refuses_to_start_without_a_key(engine):
     with pytest.raises(RuntimeError):
         create_app(sessionmaker=make_sessionmaker(engine), models=FakeModels(), api_key="")

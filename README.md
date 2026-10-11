@@ -285,7 +285,7 @@ status. It refuses a database that has other jobs unless given `--force`.
 | `POST /decisions/{id}:approve` | send the drafted message (also retries a failed send); `{"force": true}` if the candidate was already notified or has a newer decision |
 | `POST /decisions/{id}:override` | `{"result", "note", "requirement_ids"?}`: the recruiter's call; re-drafts the message and calibrates future scoring on the named answers. The note is shown to the scorer for other candidates: keep names and personal details out of it |
 | `GET / PATCH /messages/{id}` | read, or edit the subject/body before sending |
-| `GET /events?after=` | event feed |
+| `GET /events?after=` · `?last=` | event feed; `last=N` gives the newest N |
 | `GET /events/stream?after=` | the same feed as server-sent events, live; resumes after `after` or the `Last-Event-ID` header; a heartbeat comment every 15 s |
 | `GET /evals/runs` · `GET /evals/runs/{name}` | evaluation runs in `evals/runs/` (newest first, offline ones flagged, headline metrics and cost), and one run's `results.json`; run the API from the repository root |
 

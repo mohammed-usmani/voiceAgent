@@ -24,7 +24,13 @@ def list_events(
     session: Annotated[Session, Depends(get_session)],
     after: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    last: Annotated[int | None, Query(ge=1, le=500)] = None,
 ) -> list[Event]:
+    """Events after `after`, oldest first; or with `last`, the newest `last` events (still
+    oldest first), which is what a feed opening on recent history wants."""
+    if last is not None:
+        newest = select(Event).order_by(Event.id.desc()).limit(last)
+        return list(reversed(session.scalars(newest).all()))
     stmt = select(Event).where(Event.id > after).order_by(Event.id).limit(limit)
     return list(session.scalars(stmt))
 
