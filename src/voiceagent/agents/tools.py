@@ -61,15 +61,25 @@ def verify_quote(
 
 
 def verify_answer(quote: str, transcript: list[dict]) -> bool:
-    """Whether `quote` is the candidate's own words in one of their turns — never the
-    agent's, and never stitched across two answers. Spoken answers are short ("Yes.",
+    """Whether `quote` is the candidate's own words in one of their answers — never the
+    agent's, and never stitched across two answers. Back-to-back candidate turns are one
+    answer (a pause makes turn detection split it). Spoken answers are short ("Yes.",
     "Five years."), so one word is enough; a quote under three words gets no drift
     allowance, so it must match exactly."""
-    return any(
-        verify_quote(quote, t.get("text", ""), min_words=1)
-        for t in transcript
-        if t.get("role") == "candidate"
-    )
+    return any(verify_quote(quote, answer, min_words=1) for answer in _answers(transcript))
+
+
+def _answers(transcript: list[dict]) -> list[str]:
+    """The candidate's answers: runs of their turns with no agent turn between, joined."""
+    answers: list[str] = []
+    run: list[str] = []
+    for t in [*transcript, {"role": "agent"}]:
+        if t.get("role") == "candidate":
+            run.append(t.get("text", ""))
+        elif run:
+            answers.append(" ".join(run))
+            run = []
+    return answers
 
 
 def untrusted(tag: str, text: str) -> str:

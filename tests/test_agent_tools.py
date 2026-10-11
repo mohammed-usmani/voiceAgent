@@ -113,3 +113,21 @@ def test_numbers_inside_hyphenated_words_and_a_unit_count():
     assert numbers_in("I have a 60-day notice period") == [60]
     assert numbers_in("about a year in telesales, and an eight-month stint") == [1, 8]
     assert numbers_in("a lot of a things") == []
+
+
+def test_an_answer_split_by_a_pause_is_still_the_candidates_words():
+    # Turn detection split "Yes. I'm available... It won't be a problem" into two turns;
+    # the extractor quotes it whole. Back-to-back candidate turns are one answer.
+    from voiceagent.agents.tools import verify_answer
+
+    transcript = [
+        {"role": "agent", "text": "Are you available to work on-site in Mumbai?"},
+        {"role": "candidate", "text": "Yes. I'm available since I live in Mumbai."},
+        {"role": "candidate", "text": "It won't be a problem for me."},
+        {"role": "agent", "text": "Thanks. What salary are you expecting?"},
+        {"role": "candidate", "text": "Around five lakhs."},
+    ]
+    quote = "Yes. I'm available since I live in Mumbai. It won't be a problem for me."
+    assert verify_answer(quote, transcript)
+    # but never stitched across two separate answers
+    assert not verify_answer("It won't be a problem for me. Around five lakhs.", transcript)
