@@ -23,9 +23,10 @@ from voiceagent.call.store import (
     load_call,
 )
 from voiceagent.decision_log import DecisionTracker, watch
+from voiceagent.jev import default_jev
 from voiceagent.outbound import AGENT_NAME
 from voiceagent.replies import ReliableAgent, log_reply_stages, main_llm
-from voiceagent.settings import DEFAULT_VOICE
+from voiceagent.settings import DEFAULT_VOICE, get_settings
 from voiceagent.short_answers import (
     CallerText,
     ShortAnswerTurnDetector,
@@ -280,7 +281,8 @@ async def entrypoint(ctx: JobContext) -> None:
 
     if loaded is not None:
         job = loaded.job
-        publish_progress(session, publisher, loaded.criteria.requirements)
+        decider = default_jev(get_settings().typesafe_api_key)
+        publish_progress(session, publisher, loaded.criteria.requirements, decider)
         agent = ScreeningAgent(
             instructions=build_instructions(
                 job, loaded.candidate, loaded.criteria, now=datetime.now(ZoneInfo(job.timezone))

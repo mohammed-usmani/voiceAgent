@@ -12,7 +12,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, create_model
 
-from voiceagent.call.live import asked_question, words
+from voiceagent.call.live import NONE, asked_question, progress_choice, progress_request, words
 from voiceagent.evals.bench import stats
 from voiceagent.evals.bench.common import (
     DATA,
@@ -37,7 +37,6 @@ from voiceagent.evals.bench.jev import Jev
 from voiceagent.evals.cost import Meter
 
 FAST_MODEL = "deepseek-ai/DeepSeek-V4.1-Flash"
-NONE = "none"
 
 LABEL_SYSTEM = """You label the agent's turns in the transcript of a phone screening call. \
 For each numbered agent turn ([A1], [A2], ...), list the ids of the job's screening \
@@ -187,22 +186,12 @@ def run(meter: Meter, items: list[dict], out_dir: Path, limit: int | None = None
         if key in rows:
             return
         job = jobs()[it["job"]]
-        criteria = {r.id: f"{r.label}: {r.question}" for r in job.criteria.requirements}
-        criteria[NONE] = (
-            "None of these: a greeting, consent or recording disclosure, acknowledgement, "
-            "answer to the candidate's question, callback arrangement, or closing"
-        )
-        q = {
-            "type": "choice",
-            "instructions": "Which of the job's screening questions does the agent's turn ask "
-            "the candidate? A reworded question, or confirming a résumé fact for it, counts.",
-            "criteria": criteria,
-        }
         row = {"key": key, "id": it["id"], "who": "jev", "pred": None, "error": None}
         try:
-            answers, row["seconds"], _ = jev.ask(f"Agent turn: {it['text']}", {"q": q})
-            choice = answers["q"]["choice"]
-            row["pred"] = None if choice == NONE else choice
+            answers, row["seconds"], _ = jev.ask(
+                *progress_request(job.criteria.requirements, it["text"])
+            )
+            row["pred"] = progress_choice(answers)
             row["confidence"] = answers["q"].get("confidence")
         except Exception as e:
             row["error"] = repr(e)[:300]

@@ -5,7 +5,11 @@ import asyncio
 import json
 from types import SimpleNamespace
 
+import pytest
+
+from tests.fakes import FakeJev
 from voiceagent.call.live import (
+    NONE,
     PROGRESS_TOPIC,
     TURNS_TOPIC,
     Progress,
@@ -14,6 +18,7 @@ from voiceagent.call.live import (
     turn_record,
 )
 from voiceagent.evals.jobs import load_jobs
+from voiceagent.jev import Jev, JevError
 
 SUPPORT = load_jobs(["customer-support"])[0].criteria.requirements
 # The agent's turns on a simulated customer-support screening (evaluation run
@@ -174,4 +179,67 @@ async def test_progress_is_published_after_each_agent_turn_only():
     await asyncio.sleep(0)
     assert r.local_participant.sent == [
         (PROGRESS_TOPIC, {"asking": "graduate", "asked": ["graduate"]}, True)
+    ]
+
+
+# --- Jev (the decider) ---------------------------------------------------------------------
+
+
+def choosing(*choices):
+    """A FakeJev answering each progress request with the next choice, or raising it."""
+    queue = list(choices)
+
+    def answer(state, questions):
+        c = queue.pop(0)
+        if isinstance(c, Exception):
+            raise c
+        return {"q": {"choice": c, "confidence": 0.9}}
+
+    return FakeJev(answer)
+
+
+async def test_jev_picks_the_question_a_turn_asks():
+    decider = choosing("graduate", NONE)
+    progress = Progress(SUPPORT, decider)
+    assert await progress.agent_said_async("Your résumé lists a B.Com. Correct?") == {
+        "asking": "graduate",
+        "asked": ["graduate"],
+    }
+    assert await progress.agent_said_async("Thanks!") == {"asking": None, "asked": ["graduate"]}
+    state, questions = decider.asked[0]
+    assert state == "Agent turn: Your résumé lists a B.Com. Correct?"
+    q = questions["q"]
+    assert q["type"] == "choice" and list(q["criteria"])[-1] == NONE
+    assert set(q["criteria"]) == {r.id for r in SUPPORT} | {NONE}
+    graduate = next(r for r in SUPPORT if r.id == "graduate")
+    assert q["criteria"]["graduate"] == f"{graduate.label}: {graduate.question}"
+
+
+async def test_word_overlap_answers_when_jev_fails_or_is_slow():
+    progress = Progress(SUPPORT, choosing(JevError("timed out"), "not_a_requirement"))
+    text = "Have you completed your graduation?"
+    assert (await progress.agent_said_async(text))["asking"] == "graduate"
+    assert (await progress.agent_said_async("Thanks!"))["asking"] is None
+
+
+async def test_the_client_gives_up_after_its_timeout(monkeypatch):
+    async def slow(*a, **kw):
+        await asyncio.sleep(1)
+
+    monkeypatch.setattr("httpx.AsyncClient.post", slow)
+    with pytest.raises(JevError):
+        await Jev("k").ask_async("Agent turn: hi", {"q": {}}, timeout_s=0.01)
+
+
+async def test_with_jev_progress_is_published_in_the_background_in_turn_order():
+    session, r = FakeSession(), room()
+    publish_progress(session, RoomPublisher(r), SUPPORT, choosing("graduate", JevError("503")))
+    added = session.handlers["conversation_item_added"]
+    added(item("assistant", "Your résumé lists a B.Com. Correct?"))
+    added(item("assistant", "What annual salary are you expecting, in lakhs?"))
+    for _ in range(5):
+        await asyncio.sleep(0)
+    assert [m for _, m, _ in r.local_participant.sent] == [
+        {"asking": "graduate", "asked": ["graduate"]},
+        {"asking": "expected_salary", "asked": ["graduate", "expected_salary"]},
     ]
