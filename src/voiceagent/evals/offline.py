@@ -105,6 +105,7 @@ class OfflineModels:
     every check passed."""
 
     name = OFFLINE
+    decider = None  # the LLM paths
 
     def __init__(self, job: RefJob, persona: Persona | None = None) -> None:
         self.job, self.persona = job, persona

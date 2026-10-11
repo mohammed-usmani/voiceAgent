@@ -32,6 +32,9 @@ class Settings:
     smtp_password: str = ""
     smtp_from: str = ""
     smtp_starttls: bool = True
+    # TypeSafe's Jev for rubric scoring, reviewer checks and live question progress.
+    # Without it the LLM scorer, LLM reviewer and word-overlap matcher are used.
+    typesafe_api_key: str = ""
 
 
 @lru_cache
@@ -49,4 +52,5 @@ def get_settings() -> Settings:
         smtp_password=os.environ.get("SMTP_PASSWORD", ""),
         smtp_from=os.environ.get("SMTP_FROM", ""),
         smtp_starttls=os.environ.get("SMTP_STARTTLS", "true").lower() not in ("0", "false", "no"),
+        typesafe_api_key=os.environ.get("TYPESAFE_API_KEY", ""),
     )

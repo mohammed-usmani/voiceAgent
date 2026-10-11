@@ -30,11 +30,13 @@ class FakeModels:
         replies: dict[type, list] | None = None,
         embed_error: Exception | None = None,
         reviewer: "FakeModels | None" = None,
+        decider=None,
     ):
         self.replies = {k: list(v) for k, v in (replies or {}).items()}
         self.embed_error = embed_error
         self.prompts: list[tuple[str, str, str]] = []
         self.reviewer = reviewer if reviewer is not None else self
+        self.decider = decider
 
     def structured(self, schema, system, user):
         self.prompts.append((schema.__name__, system, user))
@@ -119,3 +121,21 @@ def flagged(finding: str, requirement_id: str = "python_years"):
     return ReasonCheck(
         requirement_id=requirement_id, finding=finding, matches_resume=True, supported=False
     )
+
+
+class FakeJev:
+    """Stands in for voiceagent.jev.Jev: `answer(state, questions)` gives the answers, or
+    raises. Every request is kept in `asked`."""
+
+    version = "jev-1.13"
+
+    def __init__(self, answer) -> None:
+        self.answer = answer
+        self.asked: list[tuple[str, dict]] = []
+
+    def ask(self, state: str, questions: dict) -> dict:
+        self.asked.append((state, questions))
+        return self.answer(state, questions)
+
+    async def ask_async(self, state: str, questions: dict, timeout_s: float = 2.0) -> dict:
+        return self.ask(state, questions)

@@ -12,7 +12,13 @@ import random
 from collections import defaultdict
 from pathlib import Path
 
-from voiceagent.agents.assessment import REVIEWER, Review, format_transcript
+from voiceagent.agents.assessment import (
+    FLAG_BELOW,
+    REVIEWER,
+    Review,
+    format_transcript,
+    jev_review_request,
+)
 from voiceagent.agents.tools import untrusted
 from voiceagent.evals.bench import stats
 from voiceagent.evals.bench.common import (
@@ -40,7 +46,6 @@ from voiceagent.rules import apply_rule, decide
 ORIGINAL_CALLS = 50
 PER_CORRUPTION = 20
 CORRUPTIONS = ("wrong_value", "unsupported_quote", "unit_mixup", "resume_contradiction")
-FLAG_BELOW = 0.5
 # months read as years, months read as days, a monthly figure read as annual
 UNIT_FACTOR = {"years": 12, "days": 30, "LPA": 12}
 
@@ -239,30 +244,9 @@ def reviewer_user(job, rec: dict, inst: dict) -> str:
 
 
 def jev_request(job, rec: dict, inst: dict, rid: str) -> tuple[str, dict]:
-    r = _req(job, rid)
+    """The production review step's Jev request for one reason."""
     reason = next(x for x in inst["reasons"] if x["requirement_id"] == rid)
-    keep = ("id", "label", "kind", "unit", "options", "rule", "source")
-    req = {k: v for k, v in r.model_dump(mode="json").items() if k in keep and v is not None}
-    state = (
-        f"Requirement: {json.dumps(req, ensure_ascii=False)}\n"
-        f"Reason to check: {json.dumps(reason, ensure_ascii=False)}\n\n"
-        f"Transcript:\n{format_transcript(rec['call']['transcript'])}\n\n"
-        f"Résumé:\n{inst['resume'] or '(none)'}"
-    )
-    questions = {
-        "supported": {
-            "type": "noul",
-            "instructions": "The transcript clearly supports this reason: its quote is the "
-            "candidate's own answer to this requirement, the value and its unit are read "
-            "correctly from it, and the verdict follows from the requirement's rule.",
-        },
-        "matches_resume": {
-            "type": "noul",
-            "instructions": "The résumé does not state anything different from the candidate's "
-            "answer for this requirement.",
-        },
-    }
-    return state, questions
+    return jev_review_request(_req(job, rid), reason, rec["call"]["transcript"], inst["resume"])
 
 
 def run(meter: Meter, items: list[dict], out_dir: Path, limit: int | None = None) -> dict:

@@ -8,6 +8,7 @@ from typing import Protocol, TypeVar
 
 from pydantic import BaseModel
 
+from voiceagent.jev import Jev, default_jev
 from voiceagent.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,8 @@ class Models(Protocol):
     name: str
     # The model that second-guesses this one's verdicts (the assessment's reviewer).
     reviewer: "Models"
+    # Jev, for the decisions it was benchmarked on; None means the LLM paths.
+    decider: Jev | None
 
     def structured(self, schema: type[T], system: str, user: str) -> T: ...
 
@@ -38,11 +41,21 @@ class StructuredOutputError(RuntimeError):
 class FallbackModels:
     """Main model, retried once, then the backup model on a different provider."""
 
-    def __init__(self, main, backup, embedder, *, name: str, reviewer: Models | None = None):
+    def __init__(
+        self,
+        main,
+        backup,
+        embedder,
+        *,
+        name: str,
+        reviewer: Models | None = None,
+        decider: Jev | None = None,
+    ):
         self._attempts = (("main", main), ("main", main), ("backup", backup))
         self._embedder = embedder
         self.name = name
         self.reviewer = reviewer if reviewer is not None else self
+        self.decider = decider
 
     def structured(self, schema: type[T], system: str, user: str) -> T:
         messages = [("system", system), ("human", user)]
@@ -135,4 +148,5 @@ def default_models(settings: Settings) -> FallbackModels:
         embedder,
         name=f"{settings.main_model} (backup {settings.backup_model})",
         reviewer=reviewer,
+        decider=default_jev(settings.typesafe_api_key),
     )

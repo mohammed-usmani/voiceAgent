@@ -1,6 +1,8 @@
+import json
+
 import pytest
 
-from tests.fakes import FakeModels, flagged
+from tests.fakes import FakeJev, FakeModels, flagged
 from tests.seed import CRITERIA, TRANSCRIPT
 from voiceagent.agents.assessment import (
     Evidence,
@@ -11,6 +13,7 @@ from voiceagent.agents.assessment import (
     SoftScores,
     run_assessment,
 )
+from voiceagent.jev import JevError
 
 REQS = CRITERIA.requirements  # python_years (hard >= 3), onsite_pune (hard == true), salary
 PY_QUOTE = "I have been writing Python for about five years now."
@@ -457,3 +460,124 @@ def test_no_experience_supports_a_zero():
 
     assert _number_in_quote(0, "No, I don't have any formal sales experience yet.")
     assert not _number_in_quote(0, "I have some sales experience.")
+
+
+# --- Jev (models.decider) on the score and review steps -----------------------------------
+
+
+def jev(score=1.6, flags=None, error_on=None):
+    """A FakeJev scoring every soft answer at `score` (level 0-2) and passing every reason
+    check except `flags`: {requirement_id: {"supported": x, "matches_resume": y}}.
+    `error_on`: "score" or "review" raises JevError there."""
+
+    def answer(state, questions):
+        kind = "review" if "supported" in questions else "score"
+        if kind == error_on:
+            raise JevError("HTTP 503")
+        if kind == "score":
+            return {rid: {"score": score, "confidence": 0.9} for rid in questions}
+        rid = json.loads(state.split("\n", 1)[0].removeprefix("Requirement: "))["id"]
+        got = (flags or {}).get(rid, {})
+        return {q: {"noul": got.get(q, 0.95)} for q in questions}
+
+    return FakeJev(answer)
+
+
+def reviewed(decider) -> list[str]:
+    return [
+        json.loads(s.split("\n", 1)[0].removeprefix("Requirement: "))["id"]
+        for s, q in decider.asked
+        if "supported" in q
+    ]
+
+
+def test_jev_scores_soft_answers_by_level_quoting_the_evidence():
+    decider = jev(score=1.6)
+    models = FakeModels({EvidenceSet: [evidence()]}, decider=decider)
+    a = assess(models, job="Backend Engineer at Acme")
+    assert (a.result, a.score) == ("suitable", 0.8)
+    salary = a.reasons[2]
+    assert (salary["score"], salary["quote"]) == (0.8, SALARY_QUOTE)
+    assert salary["note"] == "Jev level 1.60 of 2 (confidence 0.9)"
+    assert asked(models) == ["EvidenceSet"]  # no LLM scorer
+    state, questions = decider.asked[0]
+    assert state.startswith("Job: Backend Engineer at Acme\nAnswers to score:")
+    assert f'the candidate\'s words: "{SALARY_QUOTE}"' in state
+    assert "\n\nTranscript:\nAgent: Hi Priya" in state and "<transcript>" not in state
+    assert list(questions) == ["expected_salary"]
+    assert len(questions["expected_salary"]["criteria"]) == 3
+    step = next(t for t in a.trace if t["step"] == "score")
+    assert (step["engine"], step["model"]) == ("jev", "jev-1.13")
+    assert step["confidences"] == {"expected_salary": 0.9}
+
+
+def test_a_failed_jev_scoring_falls_back_to_the_llm_scorer():
+    models = FakeModels(
+        {EvidenceSet: [evidence()], SoftScores: [scores(0.7)]}, decider=jev(error_on="score")
+    )
+    a = assess(models)
+    assert (a.result, a.score) == ("suitable", 0.7)
+    step = next(t for t in a.trace if t["step"] == "score")
+    assert (step["engine"], step["model"]) == ("llm", "fake")
+    assert "HTTP 503" in step["jev_error"]
+
+
+def test_jev_flags_below_a_half_send_a_rejection_to_a_recruiter():
+    decider = jev(flags={"python_years": {"supported": 0.2, "matches_resume": 0.3}})
+    models = FakeModels({EvidenceSet: [evidence(python=2.0, py_quote=TWO_QUOTE)]}, decider=decider)
+    a = assess(models, transcript=TWO_CALL)
+    assert a.result == "needs_review"
+    assert a.agent_review == {
+        "agree": False,
+        "notes": "python_years: the transcript may not clearly support this reason; "
+        "python_years: the résumé says something different",
+        "challenged": "not_suitable",
+        "model": "jev-1.13",
+    }
+    assert reviewed(decider) == ["python_years"]  # only the failed must-have can overturn it
+    assert "Review" not in asked(models)
+    assert next(t for t in a.trace if t["step"] == "review")["engine"] == "jev"
+
+
+def test_a_jev_flag_on_a_soft_score_cannot_overturn_a_rejection():
+    decider = jev(flags={"expected_salary": {"supported": 0.1}})
+    models = FakeModels({EvidenceSet: [evidence(python=2.0, py_quote=TWO_QUOTE)]}, decider=decider)
+    a = assess(models, transcript=TWO_CALL)
+    assert (a.result, a.agent_review["agree"]) == ("not_suitable", True)
+
+
+def test_jev_agrees_when_no_check_is_below_a_half():
+    decider = jev(flags={"onsite_pune": {"supported": 0.5, "matches_resume": 0.6}})
+    models = FakeModels({EvidenceSet: [evidence()]}, decider=decider)
+    a = assess(models, auto_send=True)
+    assert (a.result, a.agent_review["agree"], a.agent_review["notes"]) == ("suitable", True, "")
+    assert reviewed(decider) == ["python_years", "onsite_pune", "expected_salary"]
+    state, questions = decider.asked[1]
+    assert state.startswith('Requirement: {"id": "python_years"')
+    assert "Reason to check: " in state and "Résumé:\n4 years at Infosys" in state
+    assert {q["type"] for q in questions.values()} == {"noul"}
+
+
+def test_jev_flags_a_suitable_invite_it_doubts():
+    decider = jev(flags={"expected_salary": {"supported": 0.3}})
+    models = FakeModels({EvidenceSet: [evidence()]}, decider=decider)
+    a = assess(models, auto_send=True)
+    assert a.result == "needs_review"
+    assert a.agent_review["notes"] == (
+        "expected_salary: the transcript may not clearly support this reason"
+    )
+
+
+def test_a_failed_jev_review_falls_back_to_the_llm_reviewer():
+    models = FakeModels(
+        {
+            EvidenceSet: [evidence(python=2.0, py_quote=TWO_QUOTE)],
+            Review: [Review(checks=[flagged("he said 'two' but later 'five'")])],
+        },
+        decider=jev(error_on="review"),
+    )
+    a = assess(models, transcript=TWO_CALL)
+    assert a.result == "needs_review"
+    assert a.agent_review["model"] == "fake"
+    assert a.agent_review["notes"] == "python_years: he said 'two' but later 'five'"
+    assert next(t for t in a.trace if t["step"] == "review")["engine"] == "llm"

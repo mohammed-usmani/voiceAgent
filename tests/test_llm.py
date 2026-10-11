@@ -1,6 +1,7 @@
 import pytest
 from pydantic import BaseModel
 
+from voiceagent.jev import Jev
 from voiceagent.llm import FallbackModels, StructuredOutputError, default_models
 from voiceagent.settings import Settings
 
@@ -123,3 +124,11 @@ def test_reviewer_runs_on_its_own_model_with_the_same_backup(no_local_model):
 def test_models_without_a_reviewer_review_themselves():
     m = models(FakeChat(), FakeChat())
     assert m.reviewer is m
+
+
+def test_jev_decides_only_with_a_typesafe_key(no_local_model):
+    assert (
+        default_models(Settings(database_url="", api_key="", together_api_key="t")).decider is None
+    )
+    keyed = Settings(database_url="", api_key="", together_api_key="t", typesafe_api_key="j")
+    assert isinstance(default_models(keyed).decider, Jev)

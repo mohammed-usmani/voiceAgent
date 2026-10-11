@@ -56,3 +56,16 @@ def mailer(monkeypatch):
     fake = FakeMailer()
     monkeypatch.setattr("voiceagent.worker.send.MAILER", fake)
     return fake
+
+
+@pytest.fixture(autouse=True)
+def no_jev(request, monkeypatch):
+    """No test calls Jev: an empty key (which load_dotenv won't overwrite from .env) means
+    the LLM and matcher paths. Tests of the Jev paths pass a fake decider."""
+    from voiceagent.settings import get_settings
+
+    if not request.node.get_closest_marker("live"):
+        monkeypatch.setenv("TYPESAFE_API_KEY", "")
+        get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()

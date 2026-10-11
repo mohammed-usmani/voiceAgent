@@ -220,6 +220,7 @@ async def eval_persona(
                     end_reason=sim.end_reason,
                     overrides_lookup=lookup,
                     auto_send=True,  # jobs auto-send invites by default: the reviewer checks them
+                    job=f"{job.title} at {job.company}",
                 )
 
             # the fairness replays run as production would, with the recruiter's overrides
