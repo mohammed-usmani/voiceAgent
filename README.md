@@ -324,6 +324,35 @@ Each run writes `evals/runs/<UTC timestamp>/results.json` and `report.md`, with 
 comparison against the previous run of the same jobs, personas, runs and models. Text mode doesn't see transcription errors or
 interruptions; spoken runs over SIP come later.
 
+### Decision benchmark: Jev vs LLMs
+
+`decision-bench` asks whether [Jev](https://typesafe.ai), TypeSafe's early-access decision
+model (typed answers with probabilities, no text), should replace an LLM or a heuristic at
+three points in the product: scoring soft answers after a call, tracking which question
+the agent is asking during a call, and the reviewer's per-reason checks before a verdict
+counts. The rules for a win were committed before any contender ran; one person checked 90
+of the model-made labels. Full method, numbers and caveats:
+[`evals/bench/README.md`](evals/bench/README.md).
+
+| Decision | Registered verdict | What the numbers show |
+|---|---|---|
+| Question tracking | **Jev** | 99.1% vs 91.1% today; ties the LLM, 2× faster, 4× cheaper |
+| Rubric scoring | no clear winner | Jev 5× steadier, never gamed (LLM: 12%), 8× faster |
+| Reviewer checks | no clear winner | Jev caught 80% of wrong reasons vs 57% |
+
+"No clear winner" means Jev missed one condition set in advance. In scoring, the
+name-swap test fell short of significance by 0.001 although the worst case was 0.40 for the
+LLM against 0.02 for Jev; in reviewing, its false-flag rate was 0.7 points higher where the
+rule allowed none. For a hiring system, a score that moves with the candidate's name or
+with an instruction hidden in the answer matters more than a small accuracy edge, so the
+evidence favours Jev in all three places, with question tracking the only formal win. The
+data is synthetic, labels come from a model (checked by hand on 90 items), and Jev is an
+early-access model.
+
+```bash
+uv run decision-bench --task all --budget-usd 5     # or --task scoring|progress|review
+```
+
 ## Model choice
 
 All models are on [Together AI](https://www.together.ai). Measured from India on

@@ -302,6 +302,42 @@ higher, inside the noise, so the verdict is **no clear winner**. Neither caught 
 wrong reasons: each is a simulated candidate contradicting their own ground truth, which
 neither the transcript nor the résumé shows.
 
+### Reading the results
+
+This section is interpretation, not part of the registered rules. The verdicts above stand
+as registered; "no clear winner" means Jev missed one of the conditions set in advance, not
+that it did nothing.
+
+Where each decision sits in the product:
+
+1. **Rubric scoring** runs after every call. For soft questions such as "tell me about a time
+   you calmed down an upset customer", a model scores the answer 0-1 against the rubric, and
+   those scores make up the weighted score compared with the pass mark.
+2. **Question progress** runs during a call. Each agent turn is matched to the screening
+   question it asks, so the live dashboard can tick its checklist.
+3. **Reviewer checks** run before a verdict counts: before every rejection, every verdict
+   resting on weak evidence and every invite that would be sent unattended. Each reason is
+   checked for whether its quote supports it and whether it agrees with the résumé.
+
+What the numbers support:
+
+- **Task 2 is a clear win.** Jev matches the LLM's accuracy, is faster and cheaper, and is
+  8 points more accurate than the matcher in production now.
+- **Task 1: Jev is the safer scorer, the LLM the slightly more accurate one.** Jev was
+  significantly steadier across repeats (5× lower spread), never moved by an injection
+  (0% against 12%), 8× faster, 3.5× cheaper, and significantly closer to the person's labels
+  on real answers. The LLM was slightly more accurate against the model labels, within noise.
+  The rule asked for a clearly lower name-swap spread; Jev's mean was 7× lower and its worst
+  case 0.02 against the LLM's 0.40, but the interval of the paired difference ends at +0.001,
+  so the condition was missed by a hair. For a hiring system, a score that moves with the
+  candidate's name or an instruction hidden in the answer matters more than a 0.007 accuracy
+  edge.
+- **Task 3: Jev catches far more problems.** It caught 24 points more of the wrong reasons
+  (significant), 18 of 20 unsupported quotes against 5 of 20, for about 1/18 of the cost. Its
+  false-flag rate was 0.7 points higher, a difference inside the noise, and the rule asked
+  for no increase at all. A false flag only sends a candidate to a recruiter, so the trade
+  favours Jev.
+
 ### Caveats
 
 - Synthetic data: answers were written by DeepSeek-V4-Flash, the same model as the Task 1
