@@ -11,11 +11,19 @@ benchmark asks whether TypeSafe's Jev decision model (`jev-latest`, early access
 `POST https://api.typesafe.ai/v1/systemone`) is a better choice for each, on accuracy,
 consistency, robustness, latency and cost:
 
-| Task | What is decided | Production today | Contenders |
-|---|---|---|---|
-| 1. Rubric scoring | how well a soft answer meets its rubric (0-1) | `assessment.SCORER` + `SoftScores` on DeepSeek-V4-Flash-0731 (JSON-schema mode, reasoning on, MiniMax-M3 backup) | that scorer; Jev `score` with 3 levels |
-| 2. Question progress | which approved question an agent turn asks | token-overlap matcher, `call/live.py` | that matcher; Jev `choice`; DeepSeek-V4.1-Flash (reasoning off, structured output) |
-| 3. Reviewer checks | whether each assessment reason is supported and matches the résumé | `assessment.REVIEWER` + `Review`/`ReasonCheck` on DeepSeek-V4-Pro-0813 | that reviewer; Jev `noul` |
+| Task | Decides | Contenders |
+|---|---|---|
+| 1. Rubric scoring | how well an answer meets its rubric (0-1) | production scorer, Jev |
+| 2. Question progress | which question an agent turn asks | production matcher, Jev, LLM |
+| 3. Reviewer checks | whether each reason holds up, résumé included | production reviewer, Jev |
+
+Production today, and the exact contenders:
+
+1. `assessment.SCORER` + `SoftScores` on DeepSeek-V4-Flash-0731 (JSON-schema mode, reasoning
+   on, MiniMax-M3 backup), against Jev `score` with 3 levels.
+2. The token-overlap matcher in `call/live.py`, against Jev `choice` and DeepSeek-V4.1-Flash
+   (reasoning off, structured output).
+3. `assessment.REVIEWER` + `Review`/`ReasonCheck` on DeepSeek-V4-Pro-0813, against Jev `noul`.
 
 The benchmark only imports production code; it changes none of it.
 
