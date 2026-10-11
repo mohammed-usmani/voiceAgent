@@ -11,6 +11,9 @@ original demo: Aria, a recruiter at a fictional company, confirms an applicant's
 role, experience, notice period, salary and work setup, and books a slot for their final
 interview. See [Screening backend](#screening-backend) for the API.
 
+The recruiter dashboard (live calls, decision review, evaluation) is a separate repo:
+[voiceAgent-web](https://github.com/mohammed-usmani/voiceAgent-web).
+
 ## Results
 
 Reply time is measured from the moment the caller stops speaking to the agent's first
