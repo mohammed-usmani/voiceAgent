@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from voiceagent.db.models import Candidate, Decision, Message, Task
+from voiceagent.db.models import Candidate, Decision, Job, Message, Task
 from voiceagent.events import emit
 from voiceagent.llm import Models
 from voiceagent.outcomes.email import Email, Mailer, default_mailer
@@ -113,7 +113,14 @@ def send_message(session: Session, models: Models, task: Task) -> None:
             emit(session, "message", message.id, "held", {"decision_id": str(decision.id)})
             return
     message.status = "sending"
-    email = Email(to=message.to, subject=message.subject, body=message.body)
+    decision = session.get(Decision, message.decision_id)
+    job = session.get(Job, session.get(Candidate, decision.candidate_id).job_id)
+    email = Email(
+        to=message.to,
+        subject=message.subject,
+        body=message.body,
+        sender_name=f"{job.company_name} Hiring",
+    )
     session.commit()  # visible before the send, so a rerun can tell it was attempted
 
     try:

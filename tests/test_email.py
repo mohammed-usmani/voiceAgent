@@ -127,3 +127,14 @@ def test_smtp_settings_build_an_smtp_mailer():
         2525,
         True,
     )
+
+
+def test_an_email_can_show_the_hiring_companys_name(smtp):
+    # One sending address for every job, but the candidate sees who is hiring.
+    named = Email(
+        to="priya@example.com", subject="Next steps", body="Hi", sender_name="Acme Hiring"
+    )
+    SmtpMailer("smtp.example.com", 587, sender="hiring@acme.test").send(named)
+    assert next(c for c in smtp[0].calls if c[0] == "send")[1] == "Acme Hiring <hiring@acme.test>"
+    SmtpMailer("smtp.example.com", 587, sender="Team <hiring@acme.test>").send(named)
+    assert next(c for c in smtp[1].calls if c[0] == "send")[1] == "Acme Hiring <hiring@acme.test>"

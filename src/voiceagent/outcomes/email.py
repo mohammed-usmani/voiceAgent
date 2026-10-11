@@ -6,6 +6,7 @@ import smtplib
 import ssl
 from dataclasses import dataclass
 from email.message import EmailMessage
+from email.utils import formataddr, parseaddr
 from typing import Protocol
 
 from voiceagent.settings import Settings
@@ -19,6 +20,7 @@ class Email:
     to: str
     subject: str
     body: str
+    sender_name: str = ""  # shown before the configured address, e.g. "Acme Hiring"
 
 
 class MaybeSent(Exception):
@@ -50,7 +52,11 @@ class SmtpMailer:
 
     def send(self, email: Email) -> None:
         msg = EmailMessage()
-        msg["From"] = self.sender
+        msg["From"] = (
+            formataddr((email.sender_name, parseaddr(self.sender)[1]))
+            if email.sender_name
+            else self.sender
+        )
         msg["To"] = email.to
         msg["Subject"] = email.subject
         msg.set_content(email.body)
