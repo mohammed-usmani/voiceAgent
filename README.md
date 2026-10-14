@@ -25,10 +25,21 @@ audio.
 
 **At the agent** (from its decision log):
 
-| | Median reply | Slowest reply | Replies |
-|---|---|---|---|
-| Starting point: LiveKit defaults, Gemini 2.5 Flash | 2.44 s | 3.42 s | 38 |
-| Now | 1.81 s | 2.58 s | 63 (10 calls) |
+| | Median reply | p90 | Slowest reply | Replies |
+|---|---|---|---|---|
+| Starting point: LiveKit defaults, Gemini 2.5 Flash | 2.44 s | | 3.42 s | 38 |
+| Tuned, Gemini 2.5 Flash | 1.81 s | | 2.58 s | 63 (10 calls) |
+| **Now: DeepSeek-V4.1-Flash on Together AI (14 Oct 2026)** | **1.22 s** | **2.58 s** | 5.35 s | 76 (10 calls) |
+
+The first two rows were logged before a fix (`decision_log.py`, 14 Oct): a reply's delay
+was only kept if its first audio played within 1.5 s of the turn decision, so slow replies
+went uncounted and those medians read low. The last row counts every reply.
+
+On the same ten calls (screening calls, where I interrupted, paused mid-answer and said
+"yeah" on purpose): it stopped for 15 of 15 real interruptions; it kept talking through 12
+of 14 short "yeah"/"mm-hmm" overlaps; and of 41 mid-answer pauses it waited out 30 and
+took the turn too early on 11, which is the next thing to tune. The script is
+`docs`-free: `logs/decisions/*.jsonl` from those calls, summarised per field above.
 
 **On the phone:** about 2.8 s median on a recorded call. The caller reaches the agent
 over SIP from a free softphone on mobile internet, and that path adds roughly 1–1.5 s
@@ -47,9 +58,9 @@ What moved it:
 A faster model (Qwen3.8-27B on Groq, ~0.16 s to first token) was tried and dropped: on
 real conversations its replies came back empty or cut off mid-sentence, with no error.
 
-Scale: one caller, ten test calls. These were measured with Gemini 2.5 Flash; the agent
-now runs DeepSeek-V4.1-Flash on Together AI (see [Model choice](#model-choice)), and the call
-numbers will be re-measured.
+Scale: one caller, ten test calls per row. The "What moved it" notes above were measured with
+Gemini 2.5 Flash; the agent now runs DeepSeek-V4.1-Flash on Together AI (see
+[Model choice](#model-choice)).
 
 ### Screening evaluation
 
