@@ -38,8 +38,8 @@ went uncounted and those medians read low. The last row counts every reply.
 On the same ten calls (screening calls, where I interrupted, paused mid-answer and said
 "yeah" on purpose): it stopped for 15 of 15 real interruptions; it kept talking through 12
 of 14 short "yeah"/"mm-hmm" overlaps; and of 41 mid-answer pauses it waited out 30 and
-took the turn too early on 11, which is the next thing to tune. The script is
-`docs`-free: `logs/decisions/*.jsonl` from those calls, summarised per field above.
+took the turn too early on 11, which is the next thing to tune. (From each call's `logs/decisions/*.jsonl`:
+`reply_delay_ms` and the `suspect` flags described below.)
 
 **On the phone:** about 2.8 s median on a recorded call. The caller reaches the agent
 over SIP from a free softphone on mobile internet, and that path adds roughly 1–1.5 s
