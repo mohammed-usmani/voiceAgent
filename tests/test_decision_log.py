@@ -205,3 +205,28 @@ def test_each_written_record_is_also_handed_to_on_record():
     tr.close(110.0)
     assert [(r["kind"], r["outcome"]) for r in got] == [("pause", "respond")]
     assert got[0]["eot_delay_ms"] == pytest.approx(300, abs=1)  # float subtraction
+
+
+def test_a_slow_reply_keeps_its_reply_delay():
+    # The line used to be written 1.5 s after the commit, before a slow reply's first audio:
+    # slow replies had no reply delay, so only fast ones counted towards the median.
+    tr, out = tracker()
+    tr.user_started(100.0)
+    tr.user_stopped(101.0)
+    tr.agent_state("thinking", 101.4)
+    tr.transcript("", False, 103.5)  # any event after the cut-off window
+    assert records(out) == []  # still waiting for the reply's first audio
+    tr.agent_state("speaking", 104.0)
+    tr.agent_state("listening", 108.0)
+    [rec] = records(out)
+    assert rec["reply_delay_ms"] == 3000
+
+
+def test_a_reply_that_never_speaks_is_written_after_the_wait():
+    tr, out = tracker()
+    tr.user_started(100.0)
+    tr.user_stopped(101.0)
+    tr.agent_state("thinking", 101.4)
+    tr.transcript("", False, 112.0)
+    [rec] = records(out)
+    assert rec["outcome"] == "respond" and rec["reply_delay_ms"] is None

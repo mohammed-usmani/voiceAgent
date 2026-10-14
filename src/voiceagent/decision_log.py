@@ -22,6 +22,9 @@ from voiceagent.backchannel import is_backchannel, words
 LOG_DIR = Path("logs/decisions")
 CUT_OFF_WINDOW_S = 1.5  # caller speaking again this soon after a commit means they weren't done
 SLOW_RESPONSE_MS = 1200  # turn commit slower than this after a pause feels like dead air
+# A reply is written once its first audio played (its reply delay known), or after this
+# long: written any earlier, a slow reply had no reply delay and the median looked faster.
+REPLY_WAIT_S = 10.0
 
 
 @dataclass
@@ -200,6 +203,11 @@ class DecisionTracker:
     def _flush(self, now: float) -> None:
         for p in self._points:
             if p._written or p._resolved_at is None or now < p._resolved_at + CUT_OFF_WINDOW_S:
+                continue
+            awaiting_audio = (
+                p.kind == "pause" and p.outcome == "respond" and p.reply_delay_ms is None
+            )
+            if awaiting_audio and now < p._resolved_at + REPLY_WAIT_S:
                 continue
             p.suspect = suspect_for(p)
             record = p.record()
