@@ -581,3 +581,45 @@ def test_a_failed_jev_review_falls_back_to_the_llm_reviewer():
     assert a.agent_review["model"] == "fake"
     assert a.agent_review["notes"] == "python_years: he said 'two' but later 'five'"
     assert next(t for t in a.trace if t["step"] == "review")["engine"] == "llm"
+
+
+def test_a_yes_no_soft_answer_scores_by_its_value_with_no_grading():
+    # "Do you have RAG experience?" "Yes." is a full yes: grading its wording scored 0.51.
+    rag = REQS[2].model_copy(
+        update={"id": "rag", "kind": "boolean", "unit": None, "sensitive": False}
+    )
+    decider = jev(score=1.0)
+    models = FakeModels(
+        {
+            EvidenceSet: [
+                EvidenceSet(
+                    answers=[
+                        *evidence().answers[:2],
+                        Evidence(
+                            requirement_id="rag", value=True, quote=PUNE_QUOTE, confidence=0.9
+                        ),
+                    ]
+                )
+            ]
+        },
+        decider=decider,
+    )
+    a = assess(models, requirements=[*REQS[:2], rag])
+    assert (a.result, a.score) == ("suitable", 1.0)
+    assert a.reasons[2]["note"] == "answered yes"
+    assert decider.asked == [] and asked(models) == ["EvidenceSet"]  # neither scorer asked
+
+
+def test_an_unsure_jev_score_is_rescored_by_the_llm():
+    # Jev scored "Eight." against a ₹18-28 LPA budget at confidence 0.05: a guess, not a score.
+    def answer(state, questions):
+        return {rid: {"score": 0.6, "confidence": 0.05} for rid in questions}
+
+    models = FakeModels(
+        {EvidenceSet: [evidence()], SoftScores: [scores(0.9)]}, decider=FakeJev(answer)
+    )
+    a = assess(models)
+    assert (a.result, a.score) == ("suitable", 0.9)
+    step = next(t for t in a.trace if t["step"] == "score")
+    assert step["rescored_by_llm"] == ["expected_salary"] and step["engine"] == "jev"
+    assert asked(models) == ["EvidenceSet", "SoftScores"]

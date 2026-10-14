@@ -183,6 +183,8 @@ JEV_LEVELS = [
 ]
 # A reason is flagged when Jev's answer to either check is below this.
 FLAG_BELOW = 0.5
+# A Jev score below this confidence is a guess: the LLM scorer rescores that answer.
+JEV_MIN_CONFIDENCE = 0.5
 
 
 def jev_score_request(job: str, blocks: list[dict], transcript: str) -> tuple[str, dict]:
@@ -389,8 +391,19 @@ def run_assessment(
         answered = [r for r in soft if ev[r.id].value is not None and not ev[r.id].declined]
         if not answered:
             return {"scores": {}, "trace": [{"step": "score", "scores": {}}]}
+        # A "yes" to a yes/no question fully meets it: there is no wording to grade (grading
+        # it scored a plain yes 0.51). A "no" still goes to the scorer, as before.
+        scores = {
+            r.id: SoftScore(
+                requirement_id=r.id, score=1.0, quote=ev[r.id].quote, note="answered yes"
+            )
+            for r in answered
+            if r.kind == "boolean" and ev[r.id].value is True
+        }
         blocks = []
         for r in answered:
+            if r.id in scores:
+                continue
             block = {
                 **_requirement_json(r),
                 "rubric": r.rubric,
@@ -401,31 +414,37 @@ def run_assessment(
                 block["recruiter_corrections"] = state["examples"][r.id]
             blocks.append(block)
         trace: dict = {"step": "score"}
-        out = None
-        if decider is not None:
+        if scores:
+            trace["by_answer"] = sorted(scores)
+        pending = blocks
+        if decider is not None and pending:
             try:
                 plain = re.sub(r"</?transcript>", "", convo).strip()
-                req, questions = jev_score_request(job, blocks, plain)
+                req, questions = jev_score_request(job, pending, plain)
                 answers = decider.ask(req, questions)
-                out = jev_soft_scores(answers, questions, blocks)
-                trace |= {
-                    "engine": "jev",
-                    "model": decider.version,
-                    "confidences": {k: a.get("confidence") for k, a in answers.items()},
-                }
+                confidences = {k: a.get("confidence") for k, a in answers.items()}
+                unsure = {k for k, c in confidences.items() if not (c or 0) >= JEV_MIN_CONFIDENCE}
+                for s in jev_soft_scores(answers, questions, pending).scores:
+                    if s.requirement_id not in unsure:
+                        scores[s.requirement_id] = s
+                pending = [b for b in pending if b["id"] in unsure]
+                trace |= {"engine": "jev", "model": decider.version, "confidences": confidences}
+                if pending:
+                    trace["rescored_by_llm"] = [b["id"] for b in pending]
             except Exception as e:
                 logger.warning("Jev scoring failed, scoring with the LLM: %r", e)
                 trace["jev_error"] = repr(e)[:300]
-        if out is None:
+        if pending:
             user = (
                 "Requirements to score:\n"
-                + json.dumps(blocks, indent=1, ensure_ascii=False)
+                + json.dumps(pending, indent=1, ensure_ascii=False)
                 + f"\n\nTranscript:\n{convo}"
             )
+            ids = {b["id"] for b in pending}
             out = models.structured(SoftScores, SCORER, user)
-            trace |= {"engine": "llm", "model": models.name}
-        ids = {r.id for r in answered}
-        scores = {s.requirement_id: s for s in out.scores if s.requirement_id in ids}
+            scores |= {s.requirement_id: s for s in out.scores if s.requirement_id in ids}
+            trace.setdefault("engine", "llm")
+            trace["llm_model" if trace["engine"] == "jev" else "model"] = models.name
         trace["scores"] = {k: v.model_dump(mode="json") for k, v in scores.items()}
         return {"scores": scores, "trace": [trace]}
 
