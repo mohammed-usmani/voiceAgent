@@ -59,6 +59,10 @@ IssueKind = Literal[
 ]
 
 
+# Kinds of issue that remove a requirement if they are still open at the end.
+BLOCKING = ("illegal", "ungrounded")
+
+
 class Issue(BaseModel):
     requirement_id: str | None = None
     kind: IssueKind
@@ -84,6 +88,10 @@ class State(TypedDict, total=False):
     similar: list[str]
     draft: Draft
     issues: list[Issue]
+    # Every requirement the critique called illegal, in any round: one a revision quietly
+    # left out is still reported as removed, so the recruiter sees what was refused. (An
+    # ungrounded one was invented by the drafter, not written by the recruiter: no report.)
+    flagged: dict[str, Issue]
     round: int
     result: CriteriaResult
 
@@ -158,7 +166,7 @@ def step_report(name: str, state: State) -> tuple[str, int, dict]:
         return name, rnd, {"issues": len(state["issues"]), "kinds": dict(sorted(kinds.items()))}
     result = state["result"]
     kept = len(result.criteria.requirements)
-    removed = len(state["draft"].criteria.requirements) - kept
+    removed = sum(": removed (" in w for w in result.warnings)
     return name, rnd, {"requirements": kept, "removed": removed, "warnings": result.warnings}
 
 
@@ -235,7 +243,11 @@ def run_criteria_agent(
         issues += [
             i for i in models.structured(Critique, CRITIC, user).issues if i.kind != "too_many"
         ]
-        return {"issues": issues}
+        flagged = dict(state.get("flagged", {}))
+        for i in issues:
+            if i.kind == "illegal" and i.requirement_id:
+                flagged.setdefault(i.requirement_id, i)
+        return {"issues": issues, "flagged": flagged}
 
     def route(state: State) -> str:
         return "finalize" if not state["issues"] or state["round"] >= MAX_ROUNDS else "draft"
@@ -243,9 +255,7 @@ def run_criteria_agent(
     def finalize(state: State) -> State:
         d = state["draft"]
         blocking = {
-            i.requirement_id
-            for i in state["issues"]
-            if i.kind in ("illegal", "ungrounded") and i.requirement_id
+            i.requirement_id for i in state["issues"] if i.kind in BLOCKING and i.requirement_id
         }
         kept = [r for r in d.criteria.requirements if r.id not in blocking]
         criteria = normalize_weights(d.criteria.model_copy(update={"requirements": kept}))
@@ -262,6 +272,10 @@ def run_criteria_agent(
                 warnings.append(f"{rid}: removed ({i.kind}: {i.detail})")
             else:
                 warnings.append(f"{rid or 'overall'}: {i.detail}")
+        drafted = {r.id for r in d.criteria.requirements}
+        for rid, i in state.get("flagged", {}).items():
+            if rid not in drafted:  # flagged in an earlier round, left out by a revision
+                warnings.append(f"{rid}: removed ({i.kind}: {i.detail})")
         warnings += check_criteria(criteria)[1]
         warnings += [f"Similar roles also screened for: {s}" for s in d.suggestions]
         if not kept:

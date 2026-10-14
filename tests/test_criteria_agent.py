@@ -250,7 +250,12 @@ def test_each_step_is_reported_with_counts_and_a_redraft_is_a_revise():
         ("critique", 1, {"issues": 2, "kinds": {"illegal": 1, "ungrounded": 1}}),
         ("revise", 2, {"requirements": 2, "suggestions": 0}),
         ("critique", 2, {"issues": 0, "kinds": {}}),
-        ("finalize", 2, {"requirements": 2, "removed": 0, "warnings": []}),
+        # the revision left the illegal age line out: still reported, so the recruiter sees it
+        (
+            "finalize",
+            2,
+            {"requirements": 2, "removed": 1, "warnings": ["age: removed (illegal: age)"]},
+        ),
     ]
     assert JD not in json.dumps(steps)  # counts and warnings, never the prompts
 
@@ -263,3 +268,15 @@ def test_finalize_reports_what_it_removed_and_why():
     summary = steps[-1][2]
     assert (summary["requirements"], summary["removed"]) == (1, 1)
     assert summary["warnings"][0].startswith("age: removed")
+
+
+def test_a_requirement_a_revision_quietly_drops_is_still_reported_as_removed():
+    # The critique called the age line illegal; the revision left it out without a word, so
+    # the recruiter never saw that "Candidates under 30 preferred" was refused.
+    models = FakeModels(
+        {Draft: [draft(PYTHON, INVENTED), draft(PYTHON)], Critique: [AGE_IS_ILLEGAL, Critique()]}
+    )
+    steps = steps_of(models)
+    finalize = steps[-1][2]
+    assert finalize["removed"] == 1 and finalize["requirements"] == 1
+    assert [w for w in finalize["warnings"] if "removed" in w] == ["age: removed (illegal: age)"]
