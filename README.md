@@ -1,5 +1,9 @@
 # voiceagent
 
+[![Demo: a real screening call, end to end](https://img.youtube.com/vi/UO8bbi6Go_w/hqdefault.jpg)](https://www.youtube.com/watch?v=UO8bbi6Go_w)
+
+**Demo (5 min):** [a real call to my phone, from job description to decision and email](https://www.youtube.com/watch?v=UO8bbi6Go_w). 90-second version: [youtu.be/Z1k4k22qc9c](https://youtu.be/Z1k4k22qc9c).
+
 An AI phone-screening backend. A recruiter posts a job; an agent drafts what the call
 should check and the recruiter approves it; a LiveKit voice agent calls the candidates;
 an assessment agent decides who is suitable, invites them, and leaves every rejection for
